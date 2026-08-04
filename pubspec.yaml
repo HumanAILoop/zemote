@@ -1,0 +1,44 @@
+name: zemote
+description: Zemote - ZCode remote control client (protocol reimplementation).
+publish_to: "none"
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.5.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  web_socket_channel: ^3.0.1
+  crypto: ^3.0.5
+  shared_preferences: ^2.3.2
+  mobile_scanner: ^7.4.0
+  image_picker: ^1.2.3
+  zxing2: ^0.2.4
+  image: ^4.9.1
+  file_picker: ^11.0.3
+  flutter_markdown: ^0.7.7+1
+  markdown: ^7.3.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.14.4
+
+flutter_launcher_icons:
+  android: true
+  image_path: "assets/icon/icon.png"
+  adaptive_icon_background: "#0B1220"
+  adaptive_icon_foreground: "assets/icon/icon_foreground.png"
+  web:
+    generate: true
+    image_path: "assets/icon/icon.png"
+    background_color: "#0B1220"
+    theme_color: "#0B1220"
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/icon/icon.png

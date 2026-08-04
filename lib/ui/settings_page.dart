@@ -1,0 +1,234 @@
+import 'package:flutter/material.dart';
+
+import '../protocol/zemote_client.dart';
+import 'channel_explorer_page.dart';
+import 'log_page.dart';
+import 'model_providers_page.dart';
+import 'rpc_explorer_page.dart';
+import 'services_page.dart';
+import 'theme.dart';
+import 'ui_settings.dart';
+import 'usage_page.dart';
+
+/// Builds a `{workspacePath, workspaceIdentity?}` scope from a bridge.
+Map<String, dynamic> _scopeOf(BridgeSession session) => {
+      'workspacePath': session.bridge['workspacePath'],
+      if (session.bridge['workspaceIdentity'] != null)
+        'workspaceIdentity': session.bridge['workspaceIdentity'],
+    };
+
+class SettingsPage extends StatelessWidget {
+  final ZemoteClient? client;
+  final BridgeSession? bridge;
+  final VoidCallback onDisconnect;
+  final ThemeController? themeController;
+
+  const SettingsPage({
+    super.key,
+    this.client,
+    this.bridge,
+    required this.onDisconnect,
+    this.themeController,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final controller = themeController;
+    final ui = UiSettingsProvider.of(context);
+    return ListView(
+      padding: const EdgeInsets.all(20),
+      children: [
+        Text(tr(context, 'settings.title'),
+            style: const TextStyle(
+                fontSize: 22, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 20),
+        if (controller != null)
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(tr(context, 'settings.appearance'),
+                      style: const TextStyle(
+                          fontSize: 14, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 12),
+                  AnimatedBuilder(
+                    animation: controller,
+                    builder: (context, _) => SegmentedButton<ThemeMode>(
+                      segments: [
+                        ButtonSegment(
+                            value: ThemeMode.dark,
+                            icon: const Icon(Icons.dark_mode_outlined),
+                            label:
+                                Text(tr(context, 'settings.theme.dark'))),
+                        ButtonSegment(
+                            value: ThemeMode.light,
+                            icon: const Icon(Icons.light_mode_outlined),
+                            label: Text(
+                                tr(context, 'settings.theme.light'))),
+                        ButtonSegment(
+                            value: ThemeMode.system,
+                            icon: const Icon(
+                                Icons.settings_suggest_outlined),
+                            label: Text(
+                                tr(context, 'settings.theme.system'))),
+                      ],
+                      selected: {controller.mode},
+                      onSelectionChanged: (modes) =>
+                          controller.setMode(modes.first),
+                    ),
+                  ),
+                  if (ui != null) ...[
+                    const SizedBox(height: 16),
+                    Text(tr(context, 'settings.language'),
+                        style: const TextStyle(fontSize: 13)),
+                    const SizedBox(height: 8),
+                    AnimatedBuilder(
+                      animation: ui,
+                      builder: (context, _) =>
+                          SegmentedButton<String>(
+                        segments: const [
+                          ButtonSegment(
+                              value: 'zh-CN', label: Text('中文')),
+                          ButtonSegment(
+                              value: 'en-US', label: Text('English')),
+                        ],
+                        selected: {ui.locale},
+                        onSelectionChanged: (v) => ui.setLocale(v.first),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                        '${tr(context, 'settings.textScale')} · ${ui.textScale.toStringAsFixed(2)}x',
+                        style: const TextStyle(fontSize: 13)),
+                    AnimatedBuilder(
+                      animation: ui,
+                      builder: (context, _) => Slider(
+                        value: ui.textScale,
+                        min: 0.8,
+                        max: 1.4,
+                        divisions: 12,
+                        onChanged: ui.setTextScale,
+                      ),
+                    ),
+                    Text(
+                        '${tr(context, 'settings.codeFont')} · ${ui.codeFontSize.toStringAsFixed(1)}',
+                        style: const TextStyle(fontSize: 13)),
+                    AnimatedBuilder(
+                      animation: ui,
+                      builder: (context, _) => Slider(
+                        value: ui.codeFontSize,
+                        min: 10,
+                        max: 20,
+                        divisions: 20,
+                        onChanged: ui.setCodeFontSize,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        const SizedBox(height: 12),
+        Card(
+          child: Column(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.terminal, size: 20),
+                title: const Text('协议日志'),
+                subtitle: const Text('查看 relay / IPC / V4 帧日志',
+                    style: TextStyle(fontSize: 12)),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const LogPage())),
+              ),
+              if (client != null) ...[
+                const Divider(indent: 52),
+                ListTile(
+                  leading: const Icon(Icons.bug_report_outlined, size: 20),
+                  title: const Text('RPC 调试器'),
+                  subtitle: const Text('发送原始 relay payload',
+                      style: TextStyle(fontSize: 12)),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context)
+                      .push(MaterialPageRoute(
+                          builder: (_) =>
+                              RpcExplorerPage(client: client!))),
+                ),
+              ],
+              if (bridge != null) ...[
+                const Divider(indent: 52),
+                ListTile(
+                  leading: const Icon(Icons.extension_outlined, size: 20),
+                  title: const Text('服务管理'),
+                  subtitle: const Text('插件 / 定时任务 / MCP / Skills',
+                      style: TextStyle(fontSize: 12)),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context)
+                      .push(MaterialPageRoute(
+                          builder: (_) => ServicesPage(
+                                session: bridge!,
+                                scope: _scopeOf(bridge!),
+                              ))),
+                ),
+                const Divider(indent: 52),
+                ListTile(
+                  leading: const Icon(Icons.query_stats, size: 20),
+                  title: const Text('用量'),
+                  subtitle: const Text('额度 / 配额限制 / 订阅详情',
+                      style: TextStyle(fontSize: 12)),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context)
+                      .push(MaterialPageRoute(
+                          builder: (_) =>
+                              UsagePage(session: bridge!))),
+                ),
+                const Divider(indent: 52),
+                ListTile(
+                  leading: const Icon(Icons.model_training, size: 20),
+                  title: const Text('模型供应商'),
+                  subtitle: const Text('添加 / 启停 / 删除模型供应商',
+                      style: TextStyle(fontSize: 12)),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context)
+                      .push(MaterialPageRoute(
+                          builder: (_) =>
+                              ModelProvidersPage(session: bridge!))),
+                ),
+                const Divider(indent: 52),
+                ListTile(
+                  leading: const Icon(Icons.hub_outlined, size: 20),
+                  title: const Text('Channel RPC 调试器'),
+                  subtitle: const Text(
+                      '调用任意 channel 方法（zcode-task / skills / mcp …）',
+                      style: TextStyle(fontSize: 12)),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => Navigator.of(context)
+                      .push(MaterialPageRoute(
+                          builder: (_) =>
+                              ChannelExplorerPage(session: bridge!))),
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+        Card(
+          child: ListTile(
+            leading:
+                const Icon(Icons.link_off, color: ZColors.danger, size: 20),
+            title: const Text('断开当前设备',
+                style: TextStyle(color: ZColors.danger)),
+            onTap: onDisconnect,
+          ),
+        ),
+        const SizedBox(height: 24),
+        const Center(
+          child: Text('Zemote (Flutter) · 协议复刻版',
+              style: TextStyle(fontSize: 11, color: Colors.white24)),
+        ),
+      ],
+    );
+  }
+}

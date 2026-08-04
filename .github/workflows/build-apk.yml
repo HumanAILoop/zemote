@@ -1,0 +1,47 @@
+name: Build APK
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build release APK
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze
+
+      - name: Run unit tests
+        run: flutter test
+
+      - name: Build APK (release)
+        run: flutter build apk --release
+
+      - name: Upload APK to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/app/outputs/flutter-apk/app-release.apk
+          name: ${{ github.ref_name }}
+          body: |
+            Zemote ${{ github.ref_name }}
+
+            > APK built automatically by GitHub Actions from tag `${{ github.ref_name }}`.
+          draft: false
+          prerelease: false
