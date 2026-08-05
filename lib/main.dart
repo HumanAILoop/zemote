@@ -5,6 +5,10 @@ import 'state/app_session.dart';
 import 'ui/accounts_page.dart';
 import 'ui/theme.dart';
 import 'ui/ui_settings.dart';
+import 'update/update_checker.dart';
+import 'update/update_dialog.dart';
+
+final navigatorKey = GlobalKey<NavigatorState>();
 
 void main() {
   runApp(const ZemoteApp());
@@ -28,6 +32,21 @@ class _ZemoteAppState extends State<ZemoteApp> {
     super.initState();
     _theme.load();
     _uiSettings.load();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkForUpdates());
+  }
+
+  /// Silent update check on startup — prompts only when a newer release
+  /// exists; Android builds can download + install the APK in-app.
+  Future<void> _checkForUpdates() async {
+    try {
+      final info = await checkForUpdates();
+      if (!info.isNewer) return;
+      final context = navigatorKey.currentContext;
+      if (context == null || !context.mounted) return;
+      await showUpdateDialog(context, info);
+    } catch (_) {
+      // Offline / API errors are ignored on startup.
+    }
   }
 
   @override
@@ -41,6 +60,7 @@ class _ZemoteAppState extends State<ZemoteApp> {
           builder: (context, _) => MaterialApp(
             title: 'Zemote',
             debugShowCheckedModeBanner: false,
+            navigatorKey: navigatorKey,
             theme: buildLightTheme(),
             darkTheme: buildDarkTheme(),
             themeMode: _theme.mode,

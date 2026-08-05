@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../protocol/zemote_client.dart';
+import '../update/app_version.dart';
+import '../update/update_checker.dart';
+import '../update/update_dialog.dart';
 import 'channel_explorer_page.dart';
 import 'log_page.dart';
 import 'model_providers_page.dart';
@@ -43,6 +46,17 @@ class SettingsPage extends StatelessWidget {
             style: const TextStyle(
                 fontSize: 22, fontWeight: FontWeight.w700)),
         const SizedBox(height: 20),
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.system_update_alt, size: 20),
+            title: const Text('检查更新'),
+            subtitle: Text('当前版本 v$appVersion · 检测 GitHub 最新发布',
+                style: const TextStyle(fontSize: 12)),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _checkUpdates(context),
+          ),
+        ),
+        const SizedBox(height: 12),
         if (controller != null)
           Card(
             child: Padding(
@@ -252,6 +266,46 @@ class SettingsPage extends StatelessWidget {
     if (context.mounted) {
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('已复制 GitHub 链接')));
+    }
+  }
+
+  /// Manual update check: shows a spinner, then either the update prompt
+  /// (Android: in-app APK download + install) or an up-to-date notice.
+  Future<void> _checkUpdates(BuildContext context) async {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(
+        child: Card(
+          child: Padding(
+            padding: EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 12),
+                Text('正在检查更新…', style: TextStyle(fontSize: 13)),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+    try {
+      final info = await checkForUpdates();
+      if (!context.mounted) return;
+      Navigator.of(context).pop(); // close the spinner
+      if (info.isNewer) {
+        await showUpdateDialog(context, info);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('已是最新版本 v$appVersion')));
+      }
+    } catch (e) {
+      if (!context.mounted) return;
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('检查更新失败: $e')));
     }
   }
 }
