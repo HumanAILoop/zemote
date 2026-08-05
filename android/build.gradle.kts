@@ -1,7 +1,12 @@
 allprojects {
     repositories {
-        maven { url = uri("https://maven.aliyun.com/repository/google") }
-        maven { url = uri("https://maven.aliyun.com/repository/central") }
+        // Aliyun mirrors speed up local (CN) builds; CI runners prefer the
+        // canonical google()/mavenCentral().
+        val isCI = System.getenv("CI") == "true"
+        if (!isCI) {
+            maven { url = uri("https://maven.aliyun.com/repository/google") }
+            maven { url = uri("https://maven.aliyun.com/repository/central") }
+        }
         google()
         mavenCentral()
     }

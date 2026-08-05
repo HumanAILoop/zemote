@@ -11,9 +11,15 @@ pluginManagement {
     includeBuild("$flutterSdkPath/packages/flutter_tools/gradle")
 
     repositories {
-        maven { url = uri("https://maven.aliyun.com/repository/google") }
-        maven { url = uri("https://maven.aliyun.com/repository/central") }
-        maven { url = uri("https://maven.aliyun.com/repository/gradle-plugin") }
+        // GitHub Actions runners (CI=true) use the canonical repos, which are
+        // fast and complete there. Local builds in CN use the Aliyun mirrors
+        // (google/mavenCentral/gradlePluginPortal still act as fallbacks).
+        val isCI = System.getenv("CI") == "true"
+        if (!isCI) {
+            maven { url = uri("https://maven.aliyun.com/repository/google") }
+            maven { url = uri("https://maven.aliyun.com/repository/central") }
+            maven { url = uri("https://maven.aliyun.com/repository/gradle-plugin") }
+        }
         google()
         mavenCentral()
         gradlePluginPortal()
