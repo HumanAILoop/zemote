@@ -107,17 +107,16 @@ flutter build apk
 # 单元测试（协议编解码 / 状态机 / delta 应用等）
 flutter test
 
-# 集成测试：需要真实桌面 + 自己的远程控制 URL
-# 通过环境变量提供（切勿把 URL 提交到仓库！）
+# 集成测试：需要真实桌面 + 自己的远程控制 URL，通过环境变量注入
 $env:ZEMOTE_PROBE_URL="https://zcode.z.ai/remote/v4?sid=..."
 flutter test integration_test
 ```
 
 ## 安全提示
 
-- **不要把远程控制 URL 提交到仓库**——它包含你的设备 `sid`/`hash` 凭据，拿到即可控制你的设备。
-- 集成测试通过 `ZEMOTE_PROBE_URL` 环境变量注入 URL；`.gitignore` 已忽略 `.env`、`*.remote.*` 等文件。
-- 若意外泄露，请在桌面端重新生成远程控制二维码（旧凭据会失效）。
+- 远程控制 URL 包含设备凭据（`sid` / `hash`），相当于你的设备的访问凭证，**切勿提交到版本库或分享给他人**。
+- 集成测试通过环境变量 `ZEMOTE_PROBE_URL` 注入 URL，不要写死在测试代码里；`.gitignore` 已忽略 `.env`、`*.remote.*` 等文件。
+- 如凭据意外泄露，请在桌面端 ZCode 中重新生成远程控制二维码（旧凭据会立即失效）。
 
 ## 技术栈
 
