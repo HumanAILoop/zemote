@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'channel_client.dart';
 import 'connection_params.dart';
 import 'conversation.dart';
+import 'device_info.dart';
 import 'id.dart';
 import 'relay_client.dart';
 import 'rpc_transport.dart';
@@ -380,9 +381,9 @@ class ZemoteClient {
         'updatedAt': DateTime.now().millisecondsSinceEpoch,
       },
       'deviceInfo': {
-        'platform': 'web',
+        'platform': zemotePlatformName(),
         'version': params.appVersion ?? 'web',
-        'name': 'mobile-browser',
+        'name': zemoteAppName,
       },
     });
   }

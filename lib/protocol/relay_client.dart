@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 import 'connection_params.dart';
+import 'device_info.dart';
 import 'proof.dart';
 
 enum RelayState {
@@ -130,9 +131,9 @@ class RelayClient {
       'role': 'terminal',
       'device_sid': params.deviceSid,
       'meta': {
-        'platform': 'web',
+        'platform': zemotePlatformName(),
         'version': params.appVersion ?? 'web',
-        'name': 'mobile-browser',
+        'name': zemoteAppName,
       },
       'client_ts': DateTime.now().millisecondsSinceEpoch,
     });

@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import '../protocol/zemote_client.dart';
+import 'theme.dart';
 
 /// Raw relay payload explorer: send arbitrary `zcode_type` payloads and
 /// inspect the matching response (by requestId).
@@ -94,7 +95,7 @@ class _RpcExplorerPageState extends State<RpcExplorerPage> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  border: Border.all(color: Colors.white24),
+                  border: Border.all(color: ZInk.ghost(context)),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: SingleChildScrollView(

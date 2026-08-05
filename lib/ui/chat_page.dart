@@ -158,6 +158,30 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
+  /// Opens an auxiliary (side) chat attached to the current session
+  /// (`createSelectionSideSession`) in a fresh ChatPage.
+  Future<void> _openSideChat() async {
+    final sessionId = _sessionId;
+    if (sessionId == null) return;
+    try {
+      final sideId = await _transport.createSelectionSideSession(sessionId);
+      if (!mounted) return;
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ChatPage(
+            session: widget.session,
+            scope: widget.scope,
+            workspaceKey: widget.workspaceKey,
+            sessionId: sideId,
+            title: '辅助对话',
+          ),
+        ),
+      );
+    } catch (e) {
+      _toast('打开辅助对话失败: $e');
+    }
+  }
+
   // ------------------------------------------------------------ sending
 
   String _guessMime(String fileName) {
@@ -479,7 +503,7 @@ class _ChatPageState extends State<ChatPage> {
                     if (state.currentThought.isNotEmpty)
                       state.currentThought,
                   ].where((s) => s.isNotEmpty).join(' · '),
-                  style: const TextStyle(fontSize: 11, color: Colors.white38),
+                  style: TextStyle(fontSize: 11, color: ZInk.faint(context)),
                 ),
               ),
           ],
@@ -497,6 +521,12 @@ class _ChatPageState extends State<ChatPage> {
                           _run('停止失败', () => _transport.stop(_sessionId!)),
                     )
                   : const SizedBox.shrink(),
+            ),
+          if (_sessionId != null)
+            IconButton(
+              icon: const Icon(Icons.quickreply_outlined, size: 20),
+              tooltip: '辅助对话',
+              onPressed: _openSideChat,
             ),
           IconButton(
             icon: const Icon(Icons.tune, size: 20),
@@ -549,8 +579,8 @@ class _ChatPageState extends State<ChatPage> {
             child: state == null
                 ? Center(
                     child: _sessionId == null
-                        ? const Text('输入消息开始新会话',
-                            style: TextStyle(color: Colors.white38))
+                        ? Text('输入消息开始新会话',
+                            style: TextStyle(color: ZInk.faint(context)))
                         : const CircularProgressIndicator(),
                   )
                 : !state.ready
@@ -562,10 +592,10 @@ class _ChatPageState extends State<ChatPage> {
                           final itemCount = groups.length +
                               (state.canLoadOlder ? 1 : 0);
                           if (groups.isEmpty && !state.canLoadOlder) {
-                            return const Center(
+                            return Center(
                                 child: Text('暂无消息',
                                     style:
-                                        TextStyle(color: Colors.white38)));
+                                        TextStyle(color: ZInk.faint(context))));
                           }
                           return ListView.builder(
                             controller: _scrollController,
@@ -650,8 +680,8 @@ class _ChatPageState extends State<ChatPage> {
                   ),
                   const SizedBox(width: 8),
                   Text(_progress!,
-                      style: const TextStyle(
-                          fontSize: 11, color: Colors.white54)),
+                      style: TextStyle(
+                          fontSize: 11, color: ZInk.muted(context))),
                 ],
               ),
             ),
@@ -1100,7 +1130,7 @@ class _AttachmentViewState extends State<_AttachmentView> {
     }
     if (_failed) {
       return Text('[图片加载失败] $fileName',
-          style: const TextStyle(fontSize: 11, color: Colors.white38));
+          style: TextStyle(fontSize: 11, color: ZInk.faint(context)));
     }
     if (_imageBytes == null) {
       return const Padding(
@@ -1212,7 +1242,7 @@ class _FeedbackButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return IconButton(
       icon: Icon(icon,
-          size: 15, color: active ? ZColors.primary : Colors.white24),
+          size: 15, color: active ? ZColors.primary : ZInk.ghost(context)),
       onPressed: onTap,
       visualDensity: VisualDensity.compact,
     );
@@ -1241,11 +1271,11 @@ class _ReasoningTile extends StatelessWidget {
           children: [
             Icon(Icons.psychology_outlined,
                 size: 14,
-                color: streaming ? ZColors.running : Colors.white38),
+                color: streaming ? ZColors.running : ZInk.faint(context)),
             const SizedBox(width: 6),
             Text(
               streaming ? '思考中…' : '思考过程',
-              style: const TextStyle(fontSize: 12, color: Colors.white54),
+              style: TextStyle(fontSize: 12, color: ZInk.muted(context)),
             ),
           ],
         ),
@@ -1285,7 +1315,7 @@ class _ToolCallTile extends StatelessWidget {
       'success' => (Icons.check, ZColors.success),
       'error' => (Icons.error_outline, ZColors.danger),
       'cancelled' => (Icons.block, ZColors.warning),
-      _ => (Icons.build_outlined, Colors.white38),
+      _ => (Icons.build_outlined, ZInk.faint(context)),
     };
 
     final images = display is Map &&
@@ -1311,13 +1341,13 @@ class _ToolCallTile extends StatelessWidget {
                 style: const TextStyle(
                     fontSize: 12.5, fontFamily: 'monospace')),
             subtitle: Text(status,
-                style: const TextStyle(
-                    fontSize: 10.5, color: Colors.white38)),
+                style: TextStyle(
+                    fontSize: 10.5, color: ZInk.faint(context))),
             children: [
-              if (inputText.isNotEmpty) _kv('输入', inputText),
-              if (outputText.isNotEmpty) _kv('输出', outputText),
+              if (inputText.isNotEmpty) _kv(context, '输入', inputText),
+              if (outputText.isNotEmpty) _kv(context, '输出', outputText),
               if (error is Map)
-                _kv('错误',
+                _kv(context, '错误',
                     '${error['code'] ?? ''} ${error['message'] ?? ''}'),
             ],
           ),
@@ -1346,7 +1376,7 @@ class _ToolCallTile extends StatelessWidget {
     );
   }
 
-  Widget _kv(String label, String value) {
+  Widget _kv(BuildContext context, String label, String value) {
     // Pretty-print JSON input when possible (official shows structured view)
     var display = value;
     try {
@@ -1359,8 +1389,8 @@ class _ToolCallTile extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(label,
-              style: const TextStyle(
-                  fontSize: 10.5, color: Colors.white38)),
+              style: TextStyle(
+                  fontSize: 10.5, color: ZInk.faint(context))),
           const SizedBox(height: 2),
           Container(
             width: double.infinity,
@@ -1408,8 +1438,8 @@ class _ProgressRow extends StatelessWidget {
                 if (preview.isNotEmpty) preview,
                 '${(bytes / 1024).toStringAsFixed(1)} KB',
               ].join(' · '),
-              style: const TextStyle(
-                  fontSize: 11, color: Colors.white38),
+              style: TextStyle(
+                  fontSize: 11, color: ZInk.faint(context)),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -1469,7 +1499,7 @@ class _TurnHeader extends StatelessWidget {
       'running' => ZColors.running,
       'failed' => ZColors.danger,
       'completedInterrupted' => ZColors.warning,
-      _ => Colors.white38,
+      _ => ZInk.faint(context),
     };
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 10),
@@ -1513,12 +1543,12 @@ class _TimelineMarkerWidget extends StatelessWidget {
       'forkNotice' => (
           Icons.fork_right,
           '从会话分叉而来',
-          Colors.white38
+          ZInk.faint(context)
         ),
       'forkCreated' => (
           Icons.fork_right,
           '已创建分叉会话',
-          Colors.white38
+          ZInk.faint(context)
         ),
       'modelChange' => (
           Icons.swap_horiz,
@@ -1543,9 +1573,9 @@ class _TimelineMarkerWidget extends StatelessWidget {
       'checkpointRestored' => (
           Icons.restore,
           '已恢复检查点',
-          Colors.white38
+          ZInk.faint(context)
         ),
-      _ => (Icons.info_outline, type, Colors.white38),
+      _ => (Icons.info_outline, type, ZInk.faint(context)),
     };
 
     return Center(
@@ -1604,8 +1634,8 @@ class _SubagentTile extends StatelessWidget {
                     style: const TextStyle(fontSize: 12)),
                 Text(
                     '${row['status'] ?? ''}  ${row['summaryText'] ?? ''}',
-                    style: const TextStyle(
-                        fontSize: 11, color: Colors.white38),
+                    style: TextStyle(
+                        fontSize: 11, color: ZInk.faint(context)),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis),
               ],
@@ -1696,7 +1726,7 @@ class _GoalBanner extends StatelessWidget {
             child: Text(
               objective,
               style:
-                  const TextStyle(fontSize: 12, color: Colors.white70),
+                  TextStyle(fontSize: 12, color: ZInk.soft(context)),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -1742,7 +1772,7 @@ class _BackgroundWorksBar extends StatelessWidget {
               '后台任务 ${works.length} 个运行中: '
               '${works.map((w) => w['title'] ?? w['kind']).join('、')}',
               style:
-                  const TextStyle(fontSize: 11.5, color: Colors.white70),
+                  TextStyle(fontSize: 11.5, color: ZInk.soft(context)),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -1795,8 +1825,8 @@ class _QueueBar extends StatelessWidget {
                 },
                 child: Text(
                   state.autoDrain ? '自动发送: 开' : '自动发送: 关',
-                  style: const TextStyle(
-                      fontSize: 11, color: Colors.white54),
+                  style: TextStyle(
+                      fontSize: 11, color: ZInk.muted(context)),
                 ),
               ),
             ],
@@ -1810,8 +1840,8 @@ class _QueueBar extends StatelessWidget {
                   Expanded(
                     child: Text(
                       '${item['text'] ?? ''}',
-                      style: const TextStyle(
-                          fontSize: 12, color: Colors.white70),
+                      style: TextStyle(
+                          fontSize: 12, color: ZInk.soft(context)),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -1930,7 +1960,7 @@ class _QueueAction extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return IconButton(
-      icon: Icon(icon, size: 16, color: Colors.white54),
+      icon: Icon(icon, size: 16, color: ZInk.muted(context)),
       tooltip: tooltip,
       onPressed: onTap,
       visualDensity: VisualDensity.compact,
@@ -2091,8 +2121,8 @@ class _InteractionCardState extends State<_InteractionCard> {
             Padding(
               padding: const EdgeInsets.only(top: 6),
               child: Text('${payload['summary']}',
-                  style: const TextStyle(
-                      fontSize: 12, color: Colors.white70)),
+                  style: TextStyle(
+                      fontSize: 12, color: ZInk.soft(context))),
             ),
           const SizedBox(height: 8),
           if (options is List)
@@ -2168,6 +2198,15 @@ class _ModelModeSheet extends StatelessWidget {
 
   bool get _isDraft => sessionId == null || sessionId!.isEmpty;
 
+  /// Config options beyond the model/mode/thought selects (e.g. max output
+  /// length, search enhancement) surfaced read-only from prepareWorkspace.
+  List<ConfigOption> get _otherOptions {
+    const known = {'model', 'mode', 'thought_level'};
+    final options = prep?.configOptions;
+    if (options == null) return const [];
+    return options.where((o) => !known.contains(o.id)).toList();
+  }
+
   /// 'builtin:zai-coding-plan/GLM-5.2' → (provider, model)
   (String, String) _splitModelValue(String value) {
     final idx = value.lastIndexOf('/');
@@ -2229,14 +2268,14 @@ class _ModelModeSheet extends StatelessWidget {
                     size: 18,
                     color: currentModelValue == v.value
                         ? ZColors.primary
-                        : Colors.white24,
+                        : ZInk.ghost(context),
                   ),
                   title: Text(v.name,
                       style: const TextStyle(fontSize: 13)),
                   subtitle: v.modelProviderName != null
                       ? Text(v.modelProviderName!,
-                          style: const TextStyle(
-                              fontSize: 11, color: Colors.white38))
+                          style: TextStyle(
+                              fontSize: 11, color: ZInk.faint(context)))
                       : null,
                   onTap: () {
                     if (_isDraft) {
@@ -2279,8 +2318,8 @@ class _ModelModeSheet extends StatelessWidget {
               const SizedBox(height: 12),
             ] else
               Text('当前模型: ${state?.currentModel ?? ''}',
-                  style: const TextStyle(
-                      fontSize: 12, color: Colors.white54)),
+                  style: TextStyle(
+                      fontSize: 12, color: ZInk.muted(context))),
             if (thoughtOption != null &&
                 thoughtOption.options.isNotEmpty) ...[
               Text(thoughtOption.name,
@@ -2364,14 +2403,14 @@ class _ModelModeSheet extends StatelessWidget {
                     size: 18,
                     color: currentModeValue == v.value
                         ? ZColors.primary
-                        : Colors.white24,
+                        : ZInk.ghost(context),
                   ),
                   title: Text(v.name,
                       style: const TextStyle(fontSize: 13)),
                   subtitle: v.description != null
                       ? Text(v.description!,
-                          style: const TextStyle(
-                              fontSize: 11, color: Colors.white38))
+                          style: TextStyle(
+                              fontSize: 11, color: ZInk.faint(context)))
                       : null,
                   onTap: () {
                     if (_isDraft) {
@@ -2437,6 +2476,28 @@ class _ModelModeSheet extends StatelessWidget {
                   ),
                 ],
               ),
+            ],
+            if (_otherOptions.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              const Text('其他配置', style: TextStyle(fontSize: 13)),
+              const SizedBox(height: 8),
+              for (final o in _otherOptions)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(o.name,
+                            style: const TextStyle(fontSize: 13)),
+                      ),
+                      const SizedBox(width: 8),
+                      Text('${o.currentValue}',
+                          style: TextStyle(
+                              fontSize: 12, color: ZInk.muted(context))),
+                    ],
+                  ),
+                ),
             ],
           ],
         ),
@@ -2566,7 +2627,7 @@ class _UsageRow extends StatelessWidget {
         children: [
           Text(label,
               style:
-                  const TextStyle(fontSize: 13, color: Colors.white54)),
+                  TextStyle(fontSize: 13, color: ZInk.muted(context))),
           Text(value,
               style: const TextStyle(
                   fontSize: 13, fontFamily: 'monospace')),
@@ -2641,8 +2702,8 @@ class _SlashCommandBar extends StatelessWidget {
           color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(12),
         ),
-        child: const Text('没有匹配的命令',
-            style: TextStyle(fontSize: 12, color: Colors.white38)),
+        child: Text('没有匹配的命令',
+            style: TextStyle(fontSize: 12, color: ZInk.faint(context))),
       );
     }
     return Container(
@@ -2674,8 +2735,8 @@ class _SlashCommandBar extends StatelessWidget {
                       fontSize: 13, fontFamily: 'monospace')),
               subtitle: Text(
                 command.inputHint ?? command.description,
-                style: const TextStyle(
-                    fontSize: 11, color: Colors.white38),
+                style: TextStyle(
+                    fontSize: 11, color: ZInk.faint(context)),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -2734,8 +2795,8 @@ class _InputBarState extends State<_InputBar> {
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             IconButton(
-              icon: const Icon(Icons.attach_file,
-                  size: 20, color: Colors.white54),
+              icon: Icon(Icons.attach_file,
+                  size: 20, color: ZInk.muted(context)),
               tooltip: '添加附件',
               onPressed: widget.sending ? null : widget.onAttach,
             ),

@@ -201,9 +201,9 @@ class _ModelProvidersPageState extends State<ModelProvidersPage> {
                                       ]
                                           .where((s) => s.isNotEmpty)
                                           .join(' · '),
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                           fontSize: 11,
-                                          color: Colors.white38),
+                                          color: ZInk.faint(context)),
                                       maxLines: 2,
                                       overflow: TextOverflow.ellipsis,
                                     ),
@@ -215,10 +215,10 @@ class _ModelProvidersPageState extends State<ModelProvidersPage> {
                                 onChanged: (v) => _toggle(p, v),
                               ),
                               IconButton(
-                                icon: const Icon(
+                                icon: Icon(
                                     Icons.delete_outline,
                                     size: 18,
-                                    color: Colors.white38),
+                                    color: ZInk.faint(context)),
                                 onPressed: () => _delete(p),
                               ),
                             ],

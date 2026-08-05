@@ -89,10 +89,10 @@ class _MainShellState extends State<MainShell> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.link_off, size: 48, color: Colors.white24),
+              Icon(Icons.link_off, size: 48, color: ZInk.ghost(context)),
               const SizedBox(height: 12),
-              const Text('当前设备已断开连接',
-                  style: TextStyle(color: Colors.white54)),
+              Text('当前设备已断开连接',
+                  style: TextStyle(color: ZInk.muted(context))),
               const SizedBox(height: 16),
               FilledButton.icon(
                 onPressed: widget.onDisconnect,
@@ -375,14 +375,14 @@ class _DeviceSwitcherBar extends StatelessWidget {
                 const SizedBox(width: 4),
                 Text(
                   host,
-                  style: const TextStyle(fontSize: 11, color: Colors.white38),
+                  style: TextStyle(fontSize: 11, color: ZInk.faint(context)),
                   overflow: TextOverflow.ellipsis,
                 ),
               ],
               const Spacer(),
-              const Text('切换设备',
-                  style: TextStyle(fontSize: 12, color: Colors.white54)),
-              const Icon(Icons.swap_horiz, size: 16, color: Colors.white54),
+              Text('切换设备',
+                  style: TextStyle(fontSize: 12, color: ZInk.muted(context))),
+              Icon(Icons.swap_horiz, size: 16, color: ZInk.muted(context)),
             ],
           ),
         ),
@@ -442,7 +442,7 @@ class _DeviceSwitchSheet extends StatelessWidget {
                         isActive
                             ? Icons.desktop_windows
                             : Icons.desktop_windows_outlined,
-                        color: isActive ? ZColors.primary : Colors.white38,
+                        color: isActive ? ZColors.primary : ZInk.faint(context),
                       ),
                       title: Text(account.label,
                           style: TextStyle(
@@ -465,7 +465,7 @@ class _DeviceSwitchSheet extends StatelessWidget {
                                   ? ZColors.danger
                                   : connected
                                       ? Colors.green
-                                      : Colors.white38,
+                                      : ZInk.faint(context),
                         ),
                       ),
                       trailing: isActive
@@ -473,8 +473,8 @@ class _DeviceSwitchSheet extends StatelessWidget {
                               size: 18, color: ZColors.primary)
                           : connected
                               ? IconButton(
-                                  icon: const Icon(Icons.link_off,
-                                      size: 18, color: Colors.white38),
+                                  icon: Icon(Icons.link_off,
+                                      size: 18, color: ZInk.faint(context)),
                                   tooltip: '断开该设备',
                                   onPressed: () =>
                                       session.disconnect(account.id),
@@ -567,9 +567,9 @@ class _WorkspacePicker extends StatelessWidget {
               : error != null
                   ? Center(child: Text('加载失败: $error'))
                   : workspaces.isEmpty
-                      ? const Center(
+                      ? Center(
                           child: Text('桌面端没有打开的工作区',
-                              style: TextStyle(color: Colors.white38)))
+                              style: TextStyle(color: ZInk.faint(context))))
                       : ListView.separated(
                           padding: const EdgeInsets.all(16),
                           itemCount: workspaces.length,
@@ -624,9 +624,9 @@ class _WorkspacePicker extends StatelessWidget {
                                                 if (kind.isNotEmpty) kind,
                                                 '${workspace['workspacePath'] ?? ''}',
                                               ].join(' · '),
-                                              style: const TextStyle(
+                                              style: TextStyle(
                                                   fontSize: 11,
-                                                  color: Colors.white38),
+                                                  color: ZInk.faint(context)),
                                               maxLines: 1,
                                               overflow:
                                                   TextOverflow.ellipsis,
@@ -634,8 +634,8 @@ class _WorkspacePicker extends StatelessWidget {
                                           ],
                                         ),
                                       ),
-                                      const Icon(Icons.chevron_right,
-                                          color: Colors.white24),
+                                      Icon(Icons.chevron_right,
+                                          color: ZInk.ghost(context)),
                                     ],
                                   ),
                                 ),

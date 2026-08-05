@@ -6,6 +6,7 @@ import '../state/app_session.dart';
 import 'log_page.dart';
 import 'main_shell.dart';
 import 'qr_scan_page.dart';
+import 'theme.dart';
 
 /// Home page: multi-account management. Add devices by QR scan or URL,
 /// connect/switch between them.
@@ -260,11 +261,11 @@ class _AccountsPageState extends State<AccountsPage> {
                                 fontSize: 17,
                                 fontWeight: FontWeight.w600)),
                         const SizedBox(height: 8),
-                        const Text(
+                        Text(
                           '点击右下角「添加设备」，扫码或粘贴链接\n连接你的桌面 ZCode',
                           textAlign: TextAlign.center,
                           style:
-                              TextStyle(color: Colors.white38, height: 1.6),
+                              TextStyle(color: ZInk.faint(context), height: 1.6),
                         ),
                       ],
                     ),
@@ -314,8 +315,8 @@ class _AccountsPageState extends State<AccountsPage> {
                           children: [
                             Text(
                               host,
-                              style: const TextStyle(
-                                  fontSize: 11, color: Colors.white38),
+                              style: TextStyle(
+                                  fontSize: 11, color: ZInk.faint(context)),
                             ),
                             if (client != null)
                               ValueListenableBuilder<RelayState>(
@@ -358,9 +359,9 @@ class _AccountsPageState extends State<AccountsPage> {
                                   style: TextStyle(
                                       fontSize: 11, color: Colors.orange))
                             else
-                              const Text('未连接',
+                              Text('未连接',
                                   style: TextStyle(
-                                      fontSize: 11, color: Colors.white38)),
+                                      fontSize: 11, color: ZInk.faint(context))),
                           ],
                         ),
                         trailing: Row(
@@ -442,7 +443,7 @@ class _PairSteps extends StatelessWidget {
               Container(
                 width: 10,
                 height: 1,
-                color: i <= current ? Colors.green : Colors.white24,
+                color: i <= current ? Colors.green : ZInk.ghost(context),
               ),
             Container(
               width: 6,
@@ -453,7 +454,7 @@ class _PairSteps extends StatelessWidget {
                     ? Colors.green
                     : i == current
                         ? Colors.orange
-                        : Colors.white24,
+                        : ZInk.ghost(context),
               ),
             ),
             const SizedBox(width: 3),
@@ -461,7 +462,7 @@ class _PairSteps extends StatelessWidget {
               _steps[i],
               style: TextStyle(
                 fontSize: 9,
-                color: i <= current ? Colors.white70 : Colors.white24,
+                color: i <= current ? ZInk.soft(context) : ZInk.ghost(context),
               ),
             ),
           ],

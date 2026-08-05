@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import '../protocol/channel_client.dart';
 import '../protocol/zemote_client.dart';
 
+import 'theme.dart';
+
 /// Read-only overview of managed services (plugins / cron automations).
 /// MCP & Skills are desktop-config-driven; use the Channel RPC explorer
 /// for those (a hint card is shown).
@@ -201,10 +203,10 @@ class _ServiceListState extends State<_ServiceList>
                 _data == null
                     ? '（空）'
                     : const JsonEncoder.withIndent('  ').convert(_data),
-                style: const TextStyle(
+                style: TextStyle(
                     fontFamily: 'monospace',
                     fontSize: 11,
-                    color: Colors.white54),
+                    color: ZInk.muted(context)),
               ),
             ),
           ],
@@ -224,8 +226,8 @@ class _ServiceListState extends State<_ServiceList>
               title: Text(widget.titleOf(item),
                   style: const TextStyle(fontSize: 14)),
               subtitle: Text(widget.subtitleOf(item),
-                  style: const TextStyle(
-                      fontSize: 11, color: Colors.white38)),
+                  style: TextStyle(
+                      fontSize: 11, color: ZInk.faint(context))),
               children: [
                 Padding(
                   padding: const EdgeInsets.all(12),
@@ -249,19 +251,19 @@ class _McpSkillsHint extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
+    return Center(
       child: Padding(
-        padding: EdgeInsets.all(32),
+        padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(Icons.extension_outlined,
-                size: 40, color: Colors.white24),
-            SizedBox(height: 16),
+                size: 40, color: ZInk.ghost(context)),
+            const SizedBox(height: 16),
             Text(
               'MCP 服务器与 Skills 由桌面端配置驱动。\n可在「设置 → Channel RPC 调试器」中选择\nmcp-sync / skills channel 查看与操作。',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white38, height: 1.7),
+              style: TextStyle(color: ZInk.faint(context), height: 1.7),
             ),
           ],
         ),

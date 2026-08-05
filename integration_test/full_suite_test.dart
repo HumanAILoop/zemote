@@ -294,6 +294,22 @@ void main() {
         'count=${six.state.list.length}');
     await six.dispose();
 
+    // 21.5 side chat (createSelectionSideSession) — may be rejected if the
+    // desktop version predates the auxiliary-chat protocol; non-fatal.
+    try {
+      final sideId = await transport.createSelectionSideSession(sessionId);
+      check('createSelectionSideSession', sideId.isNotEmpty, sideId);
+      final sideSub = await transport
+          .subscribe(sideId)
+          .timeout(const Duration(seconds: 25));
+      await Future.delayed(const Duration(milliseconds: 800));
+      check('侧对话订阅快照', sideSub.state.ready,
+          'rows=${sideSub.state.rows.length}');
+      await sideSub.dispose();
+    } catch (e) {
+      info('createSelectionSideSession 探测: $e');
+    }
+
     // 22. getTaskTokenUsage
     final usage = await bridge.channels.call(
       'zcode-task',

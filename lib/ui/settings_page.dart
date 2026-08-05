@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../protocol/zemote_client.dart';
 import 'channel_explorer_page.dart';
@@ -224,11 +225,33 @@ class SettingsPage extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 24),
-        const Center(
+        Center(
           child: Text('Zemote (Flutter) · 协议复刻版',
-              style: TextStyle(fontSize: 11, color: Colors.white24)),
+              style: TextStyle(fontSize: 11, color: ZInk.ghost(context))),
+        ),
+        const SizedBox(height: 6),
+        Center(
+          child: InkWell(
+            onTap: () => _copyUrl(context, 'https://github.com/HumanAILoop/zemote'),
+            child: Text(
+              'GitHub: https://github.com/HumanAILoop/zemote',
+              style: TextStyle(
+                fontSize: 11,
+                color: ZInk.faint(context),
+                decoration: TextDecoration.underline,
+              ),
+            ),
+          ),
         ),
       ],
     );
+  }
+
+  Future<void> _copyUrl(BuildContext context, String url) async {
+    await Clipboard.setData(ClipboardData(text: url));
+    if (context.mounted) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('已复制 GitHub 链接')));
+    }
   }
 }

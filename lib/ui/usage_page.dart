@@ -129,8 +129,8 @@ class _UsagePageState extends State<UsagePage> {
                             if (quota is Map && quota['level'] != null)
                               '${quota['level']}',
                           ].join(' · '),
-                          style: const TextStyle(
-                              fontSize: 12, color: Colors.white38),
+                          style: TextStyle(
+                              fontSize: 12, color: ZInk.faint(context)),
                         ),
                       ],
                     ),
@@ -179,8 +179,8 @@ class _UsagePageState extends State<UsagePage> {
                     const SizedBox(height: 6),
                     Text(
                       '剩余 ${remaining['percentage'] ?? '-'}% · 重置时间 ${_fmtTime(remaining['nextResetTime'])}',
-                      style: const TextStyle(
-                          fontSize: 11, color: Colors.white38),
+                      style: TextStyle(
+                          fontSize: 11, color: ZInk.faint(context)),
                     ),
                   ],
                 ),
@@ -248,8 +248,8 @@ class _UsagePageState extends State<UsagePage> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label,
-              style: const TextStyle(
-                  fontSize: 12, color: Colors.white54)),
+              style: TextStyle(
+                  fontSize: 12, color: ZInk.muted(context))),
           Flexible(
             child: Text(value,
                 style: const TextStyle(fontSize: 12),
@@ -293,7 +293,7 @@ class _LimitRow extends StatelessWidget {
                   if (percentage != null) '$percentage%',
                 ].join(' · '),
                 style:
-                    const TextStyle(fontSize: 11, color: Colors.white54),
+                    TextStyle(fontSize: 11, color: ZInk.muted(context)),
               ),
             ],
           ),
@@ -323,14 +323,14 @@ class _LimitRow extends StatelessWidget {
                     .whereType<Map>()
                     .map((u) => '${u['modelCode']}: ${u['usage']}')
                     .join('  '),
-                style: const TextStyle(
-                    fontSize: 10, color: Colors.white38),
+                style: TextStyle(
+                    fontSize: 10, color: ZInk.faint(context)),
               ),
             ),
           Text(
             '重置 ${fmtTime(limit['nextResetTime'])}',
             style:
-                const TextStyle(fontSize: 10, color: Colors.white24),
+                TextStyle(fontSize: 10, color: ZInk.ghost(context)),
           ),
         ],
       ),

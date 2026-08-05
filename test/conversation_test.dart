@@ -438,6 +438,37 @@ void main() {
       expect(state.sessions.containsKey('s1'), isFalse);
       expect(state.sessions.containsKey('s2'), isTrue);
     });
+
+    test('session entry parses parentSessionId (side chat marker)', () {
+      state.applyFrame({
+        'payload': {
+          'kind': 'snapshot',
+          'snapshot': {
+            'sessions': [
+              {
+                'sessionId': 'side-1',
+                'parentSessionId': 'main-1',
+                'title': 'Side chat',
+                'phase': 'running',
+                'lastActivityAt': 100,
+                'createdAt': 90,
+              },
+              {
+                'sessionId': 'main-1',
+                'title': 'Main task',
+                'phase': 'draft',
+                'lastActivityAt': 200,
+                'createdAt': 50,
+              },
+            ],
+          },
+        },
+        'toSeq': 1,
+      }, onGap: onGap);
+
+      expect(state.sessions['side-1']!.parentSessionId, 'main-1');
+      expect(state.sessions['main-1']!.parentSessionId, isNull);
+    });
   });
 }
 

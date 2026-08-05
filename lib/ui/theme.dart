@@ -52,6 +52,46 @@ class ZColors {
   static const lightBorder = Color(0x14000000);
 }
 
+/// Theme-aware ink colors. Replaces hardcoded `Colors.white*` (dark-theme
+/// ink) which become illegible on the light surfaces. The dark theme keeps
+/// the existing white ramp; the light theme maps it onto a slate ramp so
+/// text/icons stay readable on white backgrounds.
+class ZInk {
+  static bool _isLight(BuildContext context) =>
+      Theme.of(context).brightness == Brightness.light;
+
+  static const _slate = Color(0xFF0F172A);
+  static const _slate700 = Color(0xFF334155);
+  static const _slate600 = Color(0xFF475569);
+  static const _slate500 = Color(0xFF64748B);
+  static const _slate400 = Color(0xFF94A3B8);
+  static const _slate300 = Color(0xFFCBD5E1);
+
+  /// Primary text/ink (dark: `Colors.white`, light: slate-900).
+  static Color solid(BuildContext context) =>
+      _isLight(context) ? _slate : Colors.white;
+
+  /// Secondary ink (dark: `Colors.white70`, light: slate-700).
+  static Color soft(BuildContext context) =>
+      _isLight(context) ? _slate700 : Colors.white70;
+
+  /// Muted ink (dark: `Colors.white54`, light: slate-600).
+  static Color muted(BuildContext context) =>
+      _isLight(context) ? _slate600 : Colors.white54;
+
+  /// Faint ink (dark: `Colors.white38`, light: slate-500).
+  static Color faint(BuildContext context) =>
+      _isLight(context) ? _slate500 : Colors.white38;
+
+  /// Ghost ink (dark: `Colors.white24`, light: slate-400).
+  static Color ghost(BuildContext context) =>
+      _isLight(context) ? _slate400 : Colors.white24;
+
+  /// Hairline ink (dark: `Colors.white12`, light: slate-300).
+  static Color hairline(BuildContext context) =>
+      _isLight(context) ? _slate300 : Colors.white12;
+}
+
 ThemeData buildDarkTheme() {
   final scheme = ColorScheme.fromSeed(
     seedColor: ZColors.primary,

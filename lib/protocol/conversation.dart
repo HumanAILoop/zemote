@@ -212,6 +212,8 @@ class ConversationTransport {
     String? firstText,
     List<Map<String, dynamic>>? attachments,
     Map<String, dynamic>? config,
+    String? runtimeModel,
+    List<String>? mcpServers,
     Duration timeout = const Duration(seconds: 90),
   }) async {
     final res = await sendCommand(
@@ -226,6 +228,9 @@ class ConversationTransport {
               'attachments': attachments,
           },
         if (config != null) 'config': config,
+        if (runtimeModel != null) 'runtimeModel': runtimeModel,
+        if (mcpServers != null && mcpServers.isNotEmpty)
+          'mcpServers': mcpServers,
       },
       timeout: timeout,
     );
@@ -243,11 +248,45 @@ class ConversationTransport {
     return sessionId;
   }
 
+  /// Creates a selection-side (auxiliary) chat attached to [parentSessionId]
+  /// (command `createSelectionSideSession` with an empty payload, mirrors
+  /// the web client's "ask in side chat" flow). Returns the new sessionId.
+  Future<String> createSelectionSideSession(
+    String parentSessionId, {
+    Duration timeout = const Duration(seconds: 60),
+  }) async {
+    final res = await sendCommand(
+      parentSessionId,
+      'createSelectionSideSession',
+      {},
+      timeout: timeout,
+    );
+    final map = res is Map ? res.cast<String, dynamic>() : null;
+    final status = map?['status'];
+    if (status != 'accepted' && status != 'duplicate') {
+      throw StateError(
+          'createSelectionSideSession rejected: ${map?['reasonCode'] ?? status} ${map?['message'] ?? ''}');
+    }
+    final result = map?['result'];
+    final sessionId = result is Map ? result['sessionId'] : null;
+    if (sessionId is! String || sessionId.isEmpty) {
+      throw StateError(
+          'createSelectionSideSession: missing sessionId in result');
+    }
+    return sessionId;
+  }
+
   Future<dynamic> sendText(
     String sessionId,
     String text, {
     List<Map<String, dynamic>>? attachments,
     String? heldQueueDisposition,
+    List<String>? expectedHeldQueueItemIds,
+    String? automationId,
+    String? offPeakTaskId,
+    String? offPeakRunType,
+    String? botDeliveryTarget,
+    List<String>? toolDisallowlist,
   }) =>
       sendCommand(sessionId, 'sendText', {
         'text': text,
@@ -255,17 +294,32 @@ class ConversationTransport {
           'attachments': attachments,
         if (heldQueueDisposition != null)
           'heldQueueDisposition': heldQueueDisposition,
+        if (expectedHeldQueueItemIds != null &&
+            expectedHeldQueueItemIds.isNotEmpty)
+          'expectedHeldQueueItemIds': expectedHeldQueueItemIds,
+        if (automationId != null) 'automationId': automationId,
+        if (offPeakTaskId != null) 'offPeakTaskId': offPeakTaskId,
+        if (offPeakRunType != null) 'offPeakRunType': offPeakRunType,
+        if (botDeliveryTarget != null) 'botDeliveryTarget': botDeliveryTarget,
+        if (toolDisallowlist != null && toolDisallowlist.isNotEmpty)
+          'toolDisallowlist': toolDisallowlist,
       });
 
   Future<dynamic> sendGoalCommand(
     String sessionId,
     String text, {
+    String? displayText,
     String? heldQueueDisposition,
+    List<String>? expectedHeldQueueItemIds,
   }) =>
       sendCommand(sessionId, 'sendGoalCommand', {
         'text': text,
+        if (displayText != null) 'displayText': displayText,
         if (heldQueueDisposition != null)
           'heldQueueDisposition': heldQueueDisposition,
+        if (expectedHeldQueueItemIds != null &&
+            expectedHeldQueueItemIds.isNotEmpty)
+          'expectedHeldQueueItemIds': expectedHeldQueueItemIds,
       });
 
   Future<dynamic> pauseGoal(String sessionId) =>
@@ -977,7 +1031,8 @@ class SlashCommand {
         source = '${raw['source'] ?? ''}';
 }
 
-class _LogicalFrameAssembly {  final int count;
+class _LogicalFrameAssembly {
+  final int count;
   final List<Uint8List?> parts;
   final DateTime createdAt = DateTime.now();
   int received = 0;
@@ -1005,6 +1060,7 @@ class _LogicalFrameAssembly {  final int count;
 /// sessions-index subscription in the web client (`QAe` delta application).
 class SessionEntry {
   final String sessionId;
+  final String? parentSessionId;
   final String title;
   final String phase;
   final String? lastAssistantPreview;
@@ -1016,6 +1072,7 @@ class SessionEntry {
 
   SessionEntry(this.raw)
       : sessionId = '${raw['sessionId'] ?? ''}',
+        parentSessionId = raw['parentSessionId'] as String?,
         title = '${raw['title'] ?? ''}',
         phase = '${raw['phase'] ?? ''}',
         lastAssistantPreview = raw['lastAssistantPreview'] as String?,

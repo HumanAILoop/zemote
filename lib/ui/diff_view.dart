@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'theme.dart';
+
 /// Diff view for tool calls (Edit/Write/MultiEdit), replicating the web
 /// client's extraction logic (`Gfe`/`Jfe`/`Qfe`):
 /// old/new text pairs are searched in input/output/raw with alias keys,
@@ -198,10 +200,10 @@ class DiffView extends StatelessWidget {
               ),
               child: Text(
                 diff.filePath!,
-                style: const TextStyle(
+                style: TextStyle(
                     fontSize: 10.5,
                     fontFamily: 'monospace',
-                    color: Colors.white54),
+                    color: ZInk.muted(context)),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -233,17 +235,17 @@ class DiffView extends StatelessWidget {
                             const Color(0xFF86EFAC),
                           DiffLineType.removed =>
                             const Color(0xFFFCA5A5),
-                          DiffLineType.context => Colors.white60,
+                          DiffLineType.context => ZInk.soft(context),
                         },
                       ),
                     ),
                   ),
                 if (diff.lines.length > 400)
-                  const Padding(
-                    padding: EdgeInsets.all(8),
+                  Padding(
+                    padding: const EdgeInsets.all(8),
                     child: Text('…（diff 过长已截断）',
                         style: TextStyle(
-                            fontSize: 10, color: Colors.white38)),
+                            fontSize: 10, color: ZInk.faint(context))),
                   ),
               ],
             ),

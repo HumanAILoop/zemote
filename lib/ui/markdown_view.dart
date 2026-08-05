@@ -25,7 +25,8 @@ class ZemoteMarkdown extends StatelessWidget {
     final codeFont =
         UiSettingsProvider.of(context)?.codeFontSize ?? fontSize - 1.5;
     final styleSheet = MarkdownStyleSheet(
-      p: TextStyle(fontSize: fontSize, height: 1.6, color: Colors.white),
+      p: TextStyle(
+          fontSize: fontSize, height: 1.6, color: ZInk.solid(context)),
       h1: const TextStyle(
           fontSize: 20, fontWeight: FontWeight.w700, height: 1.6),
       h2: const TextStyle(
@@ -42,7 +43,7 @@ class ZemoteMarkdown extends StatelessWidget {
       ),
       codeblockDecoration: const BoxDecoration(),
       blockquote: TextStyle(
-          fontSize: fontSize, color: Colors.white60, height: 1.6),
+          fontSize: fontSize, color: ZInk.soft(context), height: 1.6),
       blockquoteDecoration: BoxDecoration(
         border: Border(
           left: BorderSide(
@@ -140,9 +141,9 @@ class _CodeBlock extends StatelessWidget {
               children: [
                 Text(
                   language.isEmpty ? 'code' : language,
-                  style: const TextStyle(
+                  style: TextStyle(
                       fontSize: 10.5,
-                      color: Colors.white38,
+                      color: ZInk.faint(context),
                       fontFamily: 'monospace'),
                 ),
                 const Spacer(),
@@ -156,10 +157,10 @@ class _CodeBlock extends StatelessWidget {
                       ),
                     );
                   },
-                  child: const Padding(
-                    padding: EdgeInsets.all(2),
+                  child: Padding(
+                    padding: const EdgeInsets.all(2),
                     child: Icon(Icons.copy_outlined,
-                        size: 13, color: Colors.white38),
+                        size: 13, color: ZInk.faint(context)),
                   ),
                 ),
               ],

@@ -7,6 +7,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:zxing2/qrcode.dart';
 
 import '../protocol/connection_params.dart';
+import 'theme.dart';
 
 /// QR scan page: camera scan (mobile_scanner) + decode from a picked image
 /// (pure-Dart zxing2, works everywhere). Pops with the scanned URL string.
@@ -116,11 +117,11 @@ class _QrScanPageState extends State<QrScanPage> {
                     },
                   ),
           ),
-          const Padding(
-            padding: EdgeInsets.all(16),
+          Padding(
+            padding: const EdgeInsets.all(16),
             child: Text(
               '对准桌面端 ZCode 远程控制二维码，或从相册选择二维码截图',
-              style: TextStyle(color: Colors.white54, fontSize: 12),
+              style: TextStyle(color: ZInk.muted(context), fontSize: 12),
               textAlign: TextAlign.center,
             ),
           ),

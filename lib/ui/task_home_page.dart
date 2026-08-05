@@ -630,10 +630,10 @@ class _TaskHomePageState extends State<TaskHomePage>
                           ),
                         ),
                         if (widget.workspaces.length > 1)
-                          const Padding(
+                          Padding(
                             padding: EdgeInsets.only(left: 4),
                             child: Icon(Icons.keyboard_arrow_down,
-                                color: Colors.white38, size: 20),
+                                color: ZInk.faint(context), size: 20),
                           ),
                       ],
                     ),
@@ -663,7 +663,7 @@ class _TaskHomePageState extends State<TaskHomePage>
             decoration: InputDecoration(
               hintText: tr(context, 'home.search'),
               prefixIcon:
-                  const Icon(Icons.search, size: 20, color: Colors.white30),
+                  Icon(Icons.search, size: 20, color: ZInk.ghost(context)),
               isDense: true,
               suffixIcon: _query.isEmpty
                   ? null
@@ -827,7 +827,7 @@ class _TaskList extends StatelessWidget {
             const SizedBox(height: 120),
             Center(
               child: Text(emptyText,
-                  style: const TextStyle(color: Colors.white38)),
+                  style: TextStyle(color: ZInk.faint(context))),
             ),
           ],
         ),
@@ -891,9 +891,9 @@ class _TaskList extends StatelessWidget {
                               padding: const EdgeInsets.only(top: 3),
                               child: Text(
                                 preview,
-                                style: const TextStyle(
+                                style: TextStyle(
                                     fontSize: 12,
-                                    color: Colors.white54,
+                                    color: ZInk.muted(context),
                                     height: 1.35),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
@@ -908,8 +908,8 @@ class _TaskList extends StatelessWidget {
                               relativeTime(
                                   (task['updatedAt'] as num?)?.toInt()),
                             ].where((s) => s.isNotEmpty).join(' · '),
-                            style: const TextStyle(
-                                fontSize: 11, color: Colors.white38),
+                            style: TextStyle(
+                                fontSize: 11, color: ZInk.faint(context)),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -927,8 +927,8 @@ class _TaskList extends StatelessWidget {
                       ),
                     // Web/桌面端长按不好触发，提供显式入口
                     IconButton(
-                      icon: const Icon(Icons.more_vert,
-                          size: 18, color: Colors.white38),
+                      icon: Icon(Icons.more_vert,
+                          size: 18, color: ZInk.faint(context)),
                       tooltip: '更多操作',
                       visualDensity: VisualDensity.compact,
                       onPressed: () => onActions(task),
