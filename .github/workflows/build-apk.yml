@@ -31,6 +31,26 @@ jobs:
       - name: Run unit tests
         run: flutter test
 
+      # Restore the release keystore from GitHub Secrets so CI-built APKs
+      # share the same signature as local builds (overwrite-install works).
+      - name: Set up release signing
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > android/app/zemote-release.jks
+            echo "ANDROID_STOREFILE=zemote-release.jks" >> "$GITHUB_ENV"
+            echo "ANDROID_STOREPASSWORD=$STORE_PASSWORD" >> "$GITHUB_ENV"
+            echo "ANDROID_KEYPASSWORD=$KEY_PASSWORD" >> "$GITHUB_ENV"
+            echo "ANDROID_KEYALIAS=$KEY_ALIAS" >> "$GITHUB_ENV"
+            echo "Release signing configured from secrets."
+          else
+            echo "WARN: ANDROID_KEYSTORE_BASE64 secret missing; APK will use debug signing."
+          fi
+
       - name: Build APK (release)
         run: flutter build apk --release
 

@@ -1,8 +1,22 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
+
+// Release signing. Local builds read android/key.properties (git-ignored);
+// CI provides the same values via GitHub Secrets as env vars so every
+// published APK shares ONE signature and can overwrite-install.
+val keystoreProperties = Properties()
+val keystorePropertiesFile = rootProject.file("key.properties")
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(keystorePropertiesFile.inputStream())
+}
+
+fun propOrEnv(name: String): String? =
+    keystoreProperties.getProperty(name) ?: System.getenv("ANDROID_${name.uppercase()}")
 
 android {
     namespace = "app.zemote"
@@ -25,11 +39,28 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        create("release") {
+            val storeFileProp = propOrEnv("storeFile")
+            if (!storeFileProp.isNullOrBlank()) {
+                keyAlias = propOrEnv("keyAlias")
+                keyPassword = propOrEnv("keyPassword")
+                storeFile = file(storeFileProp)
+                storePassword = propOrEnv("storePassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            val releaseSigning = signingConfigs.findByName("release")
+            if (releaseSigning != null && releaseSigning.storeFile != null) {
+                signingConfig = releaseSigning
+            } else {
+                // Fall back to debug keys so `flutter build apk` still works
+                // when no keystore is configured.
+                signingConfig = signingConfigs.getByName("debug")
+            }
         }
     }
 }
