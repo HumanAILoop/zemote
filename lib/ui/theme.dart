@@ -280,8 +280,9 @@ class ThemeControllerProvider extends InheritedWidget {
       controller != oldWidget.controller;
 }
 
-/// Status color mapping shared by task/chat UIs.
-Color statusColor(String status) {
+/// Status color mapping shared by task/chat UIs. The unknown-status fallback
+/// is theme-aware so it stays visible on light surfaces too.
+Color statusColor(String status, BuildContext context) {
   switch (status) {
     case 'running':
     case 'prewarming':
@@ -296,7 +297,7 @@ Color statusColor(String status) {
     case 'cancelled':
       return ZColors.warning;
     default:
-      return Colors.white38;
+      return ZInk.faint(context);
   }
 }
 

@@ -56,6 +56,8 @@ class _ChatPageState extends State<ChatPage> {
   final List<_PendingFile> _pendingFiles = [];
   double? _uploadProgress;
   WorkspacePrep? _prep;
+  List<SkillEntry> _skills = [];
+  bool _skillsLoading = false;
 
   /// Draft-mode (no session yet) model/mode/thought selection, passed as
   /// `config` to createSession on first send.
@@ -74,7 +76,8 @@ class _ChatPageState extends State<ChatPage> {
     _loadPrep();
     _inputController.addListener(() {
       final text = _inputController.text;
-      final show = text.startsWith('/') && !text.contains(' ');
+      final show = (text.startsWith('/') || text.startsWith('\$')) &&
+          !text.contains(' ');
       if (show != _showSlash && mounted) {
         setState(() => _showSlash = show);
       }
@@ -86,6 +89,15 @@ class _ChatPageState extends State<ChatPage> {
       final prep = await _transport.prepareWorkspace();
       if (mounted) setState(() => _prep = prep);
     } catch (_) {}
+    setState(() => _skillsLoading = true);
+    try {
+      final skills = await _transport.skills();
+      if (mounted) setState(() => _skills = skills);
+    } catch (_) {
+      if (mounted) setState(() => _skills = const []);
+    } finally {
+      if (mounted) setState(() => _skillsLoading = false);
+    }
   }
 
   @override
@@ -451,6 +463,50 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
+  /// Slash entries = builtin/custom commands from prepareWorkspace plus the
+  /// desktop's skills (triggered as `$name` in the composer).
+  List<_SlashItem> get _slashItems {
+    final items = <_SlashItem>[];
+    for (final c in _prep?.slashCommands ?? const <SlashCommand>[]) {
+      items.add(_SlashItem(
+        name: c.name,
+        description: c.description,
+        insert: '/${c.name} ',
+        isSkill: false,
+      ));
+    }
+    for (final s in _skills) {
+      items.add(_SlashItem(
+        name: s.name,
+        description: s.description ??
+            (s.argumentHint != null ? '${s.argumentHint}' : ''),
+        insert: '\$${s.name} ',
+        isSkill: true,
+      ));
+    }
+    return items;
+  }
+
+  /// Dedicated skill picker so skills are one tap away (no `/` guessing).
+  void _openSkillsPicker() {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => _SkillsPickerSheet(
+        skills: _skills,
+        loading: _skillsLoading,
+        onSelect: (skill) {
+          _inputController.text = '\$${skill.name} ';
+          _inputController.selection = TextSelection.collapsed(
+              offset: _inputController.text.length);
+          Navigator.of(context).pop();
+          setState(() => _showSlash = false);
+        },
+        onRefresh: _loadPrep,
+      ),
+    );
+  }
+
   void _showUsageSheet() {
     final state = _state;
     final sessionId = _sessionId;
@@ -655,13 +711,13 @@ class _ChatPageState extends State<ChatPage> {
           if (_showSlash)
             _SlashCommandBar(
               query: _inputController.text,
-              commands: _prep?.slashCommands ?? const [],
-              onSelect: (command) {
-                if (command.name == 'compact') {
+              items: _slashItems,
+              onSelect: (item) {
+                if (item.name == 'compact') {
                   _inputController.text = '/compact';
                   _send();
                 } else {
-                  _inputController.text = '/${command.name} ';
+                  _inputController.text = item.insert;
                   _inputController.selection = TextSelection.collapsed(
                       offset: _inputController.text.length);
                   setState(() => _showSlash = false);
@@ -697,6 +753,7 @@ class _ChatPageState extends State<ChatPage> {
             sending: _sending,
             onSend: _send,
             onAttach: _pickFiles,
+            onSkills: _openSkillsPicker,
           ),
         ],
       ),
@@ -2675,23 +2732,40 @@ class _JsonSheet extends StatelessWidget {
 
 // ---------------------------------------------------------------- input
 
+/// One entry in the slash popup: a builtin/custom command or a skill.
+class _SlashItem {
+  final String name;
+  final String description;
+  final String insert;
+  final bool isSkill;
+
+  const _SlashItem({
+    required this.name,
+    required this.description,
+    required this.insert,
+    this.isSkill = false,
+  });
+}
+
 class _SlashCommandBar extends StatelessWidget {
   final String query;
-  final List<SlashCommand> commands;
-  final void Function(SlashCommand command) onSelect;
+  final List<_SlashItem> items;
+  final void Function(_SlashItem item) onSelect;
 
   const _SlashCommandBar({
     required this.query,
-    required this.commands,
+    required this.items,
     required this.onSelect,
   });
 
   @override
   Widget build(BuildContext context) {
-    final q = query.startsWith('/') ? query.substring(1) : query;
+    final q = query.startsWith('/') || query.startsWith('\$')
+        ? query.substring(1)
+        : query;
     final filtered = q.isEmpty
-        ? commands
-        : commands
+        ? items
+        : items
             .where((c) => c.name.toLowerCase().startsWith(q.toLowerCase()))
             .toList();
     if (filtered.isEmpty) {
@@ -2722,19 +2796,22 @@ class _SlashCommandBar extends StatelessWidget {
             ListTile(
               dense: true,
               leading: Icon(
-                command.source == 'builtin'
-                    ? Icons.bolt
-                    : Icons.auto_awesome_outlined,
+                command.isSkill
+                    ? Icons.auto_awesome_outlined
+                    : (command.name == 'compact'
+                        ? Icons.compress
+                        : Icons.bolt),
                 size: 16,
-                color: command.source == 'builtin'
-                    ? ZColors.primary
-                    : ZColors.warning,
+                color: command.isSkill
+                    ? ZColors.warning
+                    : ZColors.primary,
               ),
-              title: Text('/${command.name}',
-                  style: const TextStyle(
-                      fontSize: 13, fontFamily: 'monospace')),
+              title: Text(
+                command.isSkill ? '\$${command.name}' : '/${command.name}',
+                style: const TextStyle(
+                    fontSize: 13, fontFamily: 'monospace')),
               subtitle: Text(
-                command.inputHint ?? command.description,
+                command.description,
                 style: TextStyle(
                     fontSize: 11, color: ZInk.faint(context)),
                 maxLines: 1,
@@ -2748,17 +2825,103 @@ class _SlashCommandBar extends StatelessWidget {
   }
 }
 
+class _SkillsPickerSheet extends StatelessWidget {
+  final List<SkillEntry> skills;
+  final bool loading;
+  final void Function(SkillEntry skill) onSelect;
+  final Future<void> Function() onRefresh;
+
+  const _SkillsPickerSheet({
+    required this.skills,
+    required this.loading,
+    required this.onSelect,
+    required this.onRefresh,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final list = skills.where((s) => s.enabled).toList();
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Text('选择 Skills',
+                    style: TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w600)),
+                const Spacer(),
+                IconButton(
+                  icon: Icon(Icons.refresh,
+                      size: 18, color: ZInk.muted(context)),
+                  tooltip: '刷新',
+                  onPressed: onRefresh,
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (loading)
+              const Padding(
+                padding: EdgeInsets.all(16),
+                child:
+                    Center(child: CircularProgressIndicator(strokeWidth: 2)),
+              )
+            else if (list.isEmpty)
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text('没有可用的 Skills',
+                    style: TextStyle(
+                        fontSize: 13, color: ZInk.muted(context))),
+              )
+            else
+              Flexible(
+                child: ListView(
+                  shrinkWrap: true,
+                  children: [
+                    for (final s in list)
+                      ListTile(
+                        dense: true,
+                        leading: const Icon(Icons.auto_awesome_outlined,
+                            size: 18, color: ZColors.warning),
+                        title: Text('\$${s.name}',
+                            style: const TextStyle(
+                                fontSize: 14, fontFamily: 'monospace')),
+                        subtitle: s.description != null
+                            ? Text(s.description!,
+                                style: TextStyle(
+                                    fontSize: 12,
+                                    color: ZInk.faint(context)),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis)
+                            : null,
+                        onTap: () => onSelect(s),
+                      ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _InputBar extends StatefulWidget {
   final TextEditingController controller;
   final bool sending;
   final VoidCallback onSend;
   final VoidCallback onAttach;
+  final VoidCallback onSkills;
 
   const _InputBar({
     required this.controller,
     required this.sending,
     required this.onSend,
     required this.onAttach,
+    required this.onSkills,
   });
 
   @override
@@ -2766,26 +2929,6 @@ class _InputBar extends StatefulWidget {
 }
 
 class _InputBarState extends State<_InputBar> {
-  final _focusNode = FocusNode();
-
-  @override
-  void dispose() {
-    _focusNode.dispose();
-    super.dispose();
-  }
-
-  /// Enter sends; Shift+Enter inserts a newline (mirrors the web composer).
-  KeyEventResult _handleKey(FocusNode node, KeyEvent event) {
-    if (event is KeyDownEvent &&
-        event.logicalKey == LogicalKeyboardKey.enter &&
-        !HardwareKeyboard.instance.isShiftPressed &&
-        !widget.sending) {
-      widget.onSend();
-      return KeyEventResult.handled;
-    }
-    return KeyEventResult.ignored;
-  }
-
   @override
   Widget build(BuildContext context) {
     return SafeArea(
@@ -2800,21 +2943,22 @@ class _InputBarState extends State<_InputBar> {
               tooltip: '添加附件',
               onPressed: widget.sending ? null : widget.onAttach,
             ),
+            IconButton(
+              icon: Icon(Icons.auto_awesome_outlined,
+                  size: 20, color: ZInk.muted(context)),
+              tooltip: '选择 Skills',
+              onPressed: widget.sending ? null : widget.onSkills,
+            ),
             Expanded(
-              child: Focus(
-                focusNode: _focusNode,
-                onKeyEvent: _handleKey,
-                child: TextField(
-                  controller: widget.controller,
-                  minLines: 1,
-                  maxLines: 5,
-                  style: const TextStyle(fontSize: 14),
-                  decoration: const InputDecoration(
-                    hintText: '向 ZCode 发送消息…（Enter 发送，Shift+Enter 换行）',
-                  ),
-                  textInputAction: TextInputAction.send,
-                  onSubmitted: (_) => widget.onSend(),
+              child: TextField(
+                controller: widget.controller,
+                minLines: 1,
+                maxLines: 5,
+                style: const TextStyle(fontSize: 14),
+                decoration: const InputDecoration(
+                  hintText: '向 ZCode 发送消息…',
                 ),
+                textInputAction: TextInputAction.newline,
               ),
             ),
             const SizedBox(width: 10),

@@ -846,7 +846,7 @@ class _TaskList extends StatelessWidget {
           final status = statusOf(task);
           final unread = task['unreadAt'] != null;
           final preview = task['lastAssistantPreview'] as String?;
-          final color = statusColor(status);
+          final color = statusColor(status, context);
 
           Widget tile = Card(
             child: InkWell(

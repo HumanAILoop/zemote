@@ -643,6 +643,32 @@ class ConversationTransport {
     _prep = prep;
     return prep;
   }
+
+  /// `skills.list` — enabled skills of this workspace (mirrors the web
+  /// client's `skillsService.list`). Skills are invoked in the composer as
+  /// `$name`. Returns an empty list when the channel rejects or returns no
+  /// skill data.
+  Future<List<SkillEntry>> skills() async {
+    final res = await _channels.call(
+      Channels.skills,
+      'list',
+      [
+        {
+          'workspacePath': scope['workspacePath'],
+          if (scope['workspaceIdentity'] != null)
+            'workspaceIdentity': scope['workspaceIdentity'],
+          'provider': 'glm',
+        },
+      ],
+      timeout: const Duration(seconds: 20),
+    );
+    final raw = res is List ? res : (res is Map ? res['skills'] : null);
+    if (raw is! List) return const [];
+    return [
+      for (final item in raw.whereType<Map>())
+        SkillEntry._(item.cast<String, dynamic>()),
+    ].where((s) => s.name.isNotEmpty).toList();
+  }
 }
 
 /// Shared base for Conversation/SessionsIndex subscriptions.
@@ -982,6 +1008,26 @@ class WorkspacePrep {
     }
     return null;
   }
+}
+
+/// A desktop skill (`skills.list`), triggered in the composer as `$name`.
+class SkillEntry {
+  final String id;
+  final String name;
+  final String path;
+  final String scope;
+  final String? description;
+  final String? argumentHint;
+  final bool enabled;
+
+  SkillEntry._(Map raw)
+      : id = '${raw['id'] ?? ''}',
+        name = '${raw['name'] ?? ''}',
+        path = '${raw['path'] ?? ''}',
+        scope = '${raw['scope'] ?? 'workspace'}',
+        description = raw['description'] as String?,
+        argumentHint = raw['argumentHint'] as String?,
+        enabled = raw['enabled'] != false;
 }
 
 class ConfigOption {

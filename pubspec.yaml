@@ -1,7 +1,7 @@
 name: zemote
 description: Zemote - ZCode remote control client (protocol reimplementation).
 publish_to: "none"
-version: 0.2.0+1
+version: 0.2.1+1
 
 environment:
   sdk: ^3.5.0

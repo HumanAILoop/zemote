@@ -74,24 +74,31 @@ class SettingsPage extends StatelessWidget {
                       segments: [
                         ButtonSegment(
                             value: ThemeMode.dark,
-                            icon: const Icon(Icons.dark_mode_outlined),
-                            label:
-                                Text(tr(context, 'settings.theme.dark'))),
+                            icon: const Icon(Icons.dark_mode_outlined, size: 16),
+                            label: Text(tr(context, 'settings.theme.dark'),
+                                style: const TextStyle(fontSize: 12))),
                         ButtonSegment(
                             value: ThemeMode.light,
-                            icon: const Icon(Icons.light_mode_outlined),
-                            label: Text(
-                                tr(context, 'settings.theme.light'))),
+                            icon:
+                                const Icon(Icons.light_mode_outlined, size: 16),
+                            label: Text(tr(context, 'settings.theme.light'),
+                                style: const TextStyle(fontSize: 12))),
                         ButtonSegment(
                             value: ThemeMode.system,
-                            icon: const Icon(
-                                Icons.settings_suggest_outlined),
-                            label: Text(
-                                tr(context, 'settings.theme.system'))),
+                            icon: const Icon(Icons.settings_suggest_outlined,
+                                size: 16),
+                            label: Text(tr(context, 'settings.theme.system'),
+                                style: const TextStyle(fontSize: 12))),
                       ],
                       selected: {controller.mode},
                       onSelectionChanged: (modes) =>
                           controller.setMode(modes.first),
+                      style: const ButtonStyle(
+                        visualDensity: VisualDensity.compact,
+                        textStyle: WidgetStatePropertyAll(
+                            TextStyle(fontSize: 12)),
+                        iconSize: WidgetStatePropertyAll(16),
+                      ),
                     ),
                   ),
                   if (ui != null) ...[
@@ -105,12 +112,21 @@ class SettingsPage extends StatelessWidget {
                           SegmentedButton<String>(
                         segments: const [
                           ButtonSegment(
-                              value: 'zh-CN', label: Text('中文')),
+                              value: 'zh-CN',
+                              label: Text('中文',
+                                  style: TextStyle(fontSize: 12))),
                           ButtonSegment(
-                              value: 'en-US', label: Text('English')),
+                              value: 'en-US',
+                              label: Text('English',
+                                  style: TextStyle(fontSize: 12))),
                         ],
                         selected: {ui.locale},
                         onSelectionChanged: (v) => ui.setLocale(v.first),
+                        style: const ButtonStyle(
+                          visualDensity: VisualDensity.compact,
+                          textStyle: WidgetStatePropertyAll(
+                              TextStyle(fontSize: 12)),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 16),
