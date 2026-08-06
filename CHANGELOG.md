@@ -1,0 +1,40 @@
+# Changelog
+
+本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
+
+## [0.2.1] - 2026-08-06
+
+### Added
+- **Skills 支持**：通过 `skills.list` channel 拉取桌面端 Skills，合并进斜杠命令列表（`$` 前缀触发）；新增「选择 Skills」底部弹层，一键填入 `$skillname`。
+- **统一 Release 签名**：引入正式 keystore，本地与 CI（GitHub Secrets）使用同一签名，APK 可覆盖安装、支持持续升级。
+
+### Changed
+- 输入框：Enter 改为换行，仅通过发送按钮发送；缩短提示文案避免变形。
+- 设置页：主题/语言切换按钮改为紧凑小字号，避免变形；新增「检查更新」入口与当前版本展示。
+- 状态点颜色改为主题感知，浅色主题下不再不可见。
+
+### Fixed
+- 浅色主题下部分文本/图标配色不可读的问题（全面改用主题感知的 `ZInk` 配色）。
+
+## [0.2.0] - 2026-08-05
+
+### Added
+- **辅助对话（Side Chat）**：`createSelectionSideSession` 协议支持 + 对话页入口，可开启独立侧对话并行提问。
+- **更新检测**：启动自动检查 GitHub 最新发布；Android 端可下载 APK 并调用系统安装器升级（设置页含手动入口）。
+- 协议字段扩展：`sendText` / `sendGoalCommand` / `createSession` 新增 `automationId`、`offPeakTaskId`、`botDeliveryTarget`、`runtimeModel`、`mcpServers` 等；sessions-index 新增 `parentSessionId`。
+- 对话页展示 `prepareWorkspace` 中的其他配置项（如最大输出长度、搜索增强）。
+
+### Changed
+- 设备身份改为真实值（`platform` / `name`），不再伪装为浏览器。
+- 版本号升至 `0.2.0+1`。
+
+## [0.1.0] - 2026-08-04
+
+### Added
+- 首个发布版本：ZCode 桌面端移动远程控制客户端（协议复刻）。
+- 多设备并发连接、扫码/粘贴添加设备。
+- 任务列表（任务/置顶/已归档 + 搜索 + 未读标记）。
+- Conversation V4 对话：流式回复、推理过程、斜杠命令、模型/模式/思考切换、排队消息、目标指令、附件、diff、回滚、反馈。
+- 模型供应商管理、用量/配额/订阅查看。
+- 协议调试工具（日志 / RPC / Channel）。
+- 浅色/深色主题、字体缩放、中英双语。

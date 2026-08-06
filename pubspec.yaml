@@ -1,5 +1,8 @@
 name: zemote
-description: Zemote - ZCode remote control client (protocol reimplementation).
+description: >-
+  Zemote - mobile remote control client for ZCode desktop (protocol
+  reimplementation). Manage multiple desktops: tasks, Conversation V4 chat,
+  file changes, model providers and usage quotas.
 publish_to: "none"
 version: 0.2.1+1
 
