@@ -7,6 +7,7 @@ import 'ui/theme.dart';
 import 'ui/ui_settings.dart';
 import 'update/update_checker.dart';
 import 'update/update_dialog.dart';
+import 'notifications/notifications.dart';
 
 final navigatorKey = GlobalKey<NavigatorState>();
 
@@ -30,6 +31,7 @@ class _ZemoteAppState extends State<ZemoteApp> {
   @override
   void initState() {
     super.initState();
+    notificationsService.init();
     _theme.load();
     _uiSettings.load();
     WidgetsBinding.instance.addPostFrameCallback((_) => _checkForUpdates());

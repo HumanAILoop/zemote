@@ -2,10 +2,13 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../notifications/notifications.dart';
+import '../notifications/task_notifier.dart';
 import '../protocol/relay_client.dart';
 import '../protocol/zemote_client.dart';
 import '../state/account_store.dart';
 import '../state/app_session.dart';
+import 'chat_page.dart';
 import 'settings_page.dart';
 import 'task_home_page.dart';
 import 'theme.dart';
@@ -147,6 +150,7 @@ class _MainShellContentState extends State<_MainShellContent> {
   BridgeSession? _bridge;
   bool _bridgeOpening = false;
   StreamSubscription? _updatedSub;
+  TaskNotifier? _taskNotifier;
 
   @override
   void initState() {
@@ -162,6 +166,7 @@ class _MainShellContentState extends State<_MainShellContent> {
   @override
   void dispose() {
     _updatedSub?.cancel();
+    _taskNotifier?.dispose();
     _bridge?.dispose();
     super.dispose();
   }
@@ -207,10 +212,13 @@ class _MainShellContentState extends State<_MainShellContent> {
       }
       setState(() {
         _bridge?.dispose();
+        _taskNotifier?.dispose();
+        _taskNotifier = null;
         _bridge = session;
         _activeWorkspace = workspace;
         _bridgeOpening = false;
       });
+      _startTaskNotifier(session, workspace);
     } catch (e) {
       if (!mounted) return;
       setState(() => _bridgeOpening = false);
@@ -219,9 +227,43 @@ class _MainShellContentState extends State<_MainShellContent> {
     }
   }
 
+  /// Background task notifications: while tasks are running, a silent
+  /// foreground-service notification shows live progress and completion
+  /// alerts route back into the task's chat (Android only).
+  void _startTaskNotifier(BridgeSession bridge, Map<String, dynamic> workspace) {
+    if (!Notifications.isSupported || _taskNotifier != null) return;
+    final scope = <String, dynamic>{
+      'workspacePath': workspace['workspacePath'],
+      if (workspace['workspaceIdentity'] != null)
+        'workspaceIdentity': workspace['workspaceIdentity'],
+    };
+    final workspaceKey = workspaceKeyOf(workspace) ?? '';
+    _taskNotifier = TaskNotifier(
+      bridge: bridge,
+      scope: scope,
+      notifications: notificationsService,
+      onOpenTask: (taskId, title) async {
+        final navigator = Navigator.of(context);
+        navigator.push(
+          MaterialPageRoute(
+            builder: (_) => ChatPage(
+              session: bridge,
+              scope: scope,
+              workspaceKey: workspaceKey,
+              sessionId: taskId,
+              title: title,
+            ),
+          ),
+        );
+      },
+    )..start();
+  }
+
   void _closeBridge() {
     setState(() {
       _bridge?.dispose();
+      _taskNotifier?.dispose();
+      _taskNotifier = null;
       _bridge = null;
       _activeWorkspace = null;
     });

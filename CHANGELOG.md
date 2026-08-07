@@ -2,6 +2,11 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### Added
+- **后台任务通知（Android）**：任务运行中时，通知栏静默常驻并实时更新最新进展（前台服务保活）；任务完成静默提醒（低优先级、不弹窗）；点击通知直达对应对话。
+
 ## [0.2.1] - 2026-08-06
 
 ### Added
