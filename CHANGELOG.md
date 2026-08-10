@@ -2,7 +2,7 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
-## [Unreleased]
+## [0.3.1] - 2026-08-07
 
 ### Fixed
 - **新建会话首条消息可能发不出去**：普通文本首条消息改为随 `createSession(firstInput)` 一起发送（对齐官方 composer），避免订阅未就绪时命令被丢弃；附件/目标指令路径在发送前等待订阅建立。
