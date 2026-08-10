@@ -295,9 +295,17 @@ class _ChatPageState extends State<ChatPage> {
         // 1) create the session (can take a while when the runtime warms)
         setState(() => _progress = '正在创建会话（首次可能需要预热）…');
         final sw = Stopwatch()..start();
+        // Plain text first message is sent WITH createSession (firstInput,
+        // mirrors the official composer). This avoids a send-before-subscribe
+        // race where the first command can be dropped on a fresh session.
+        final canUseFirstInput = text.isNotEmpty &&
+            _pendingFiles.isEmpty &&
+            !text.startsWith('/goal ') &&
+            heldDisposition == null;
         try {
           sessionId = await _transport.createSession(
             widget.workspaceKey,
+            firstText: canUseFirstInput ? text : null,
             config: _buildDraftConfig(),
             timeout: const Duration(seconds: 90),
           );
@@ -311,14 +319,27 @@ class _ChatPageState extends State<ChatPage> {
         _sessionId = sessionId;
         // 2) subscribe in the background — must NOT block sending
         setState(() => _progress = null);
-        _subscribe();
+        if (canUseFirstInput) {
+          // Message already sent with the session; just display history.
+          _inputController.clear();
+          setState(() => _pendingFiles.clear());
+          _subscribe();
+          return;
+        }
+        // Attachments / goal commands: the follow-up command needs an active
+        // subscription, so wait for it before proceeding.
+        await _subscribe();
       }
       if (text.startsWith('/goal ')) {
-        await _transport.sendGoalCommand(
+        final res = await _transport.sendGoalCommand(
           sessionId,
           text.substring('/goal '.length).trim(),
           heldQueueDisposition: heldDisposition,
         );
+        if (_ackRejected(res)) {
+          _toast('发送失败: ${_ackReason(res)}');
+          return;
+        }
         _inputController.clear();
         return;
       }
@@ -328,12 +349,16 @@ class _ChatPageState extends State<ChatPage> {
         attachments = await _uploadPending(sessionId);
         setState(() => _progress = null);
       }
-      await _transport.sendText(
+      final res = await _transport.sendText(
         sessionId,
         text,
         attachments: attachments,
         heldQueueDisposition: heldDisposition,
       );
+      if (_ackRejected(res)) {
+        _toast('发送失败: ${_ackReason(res)}');
+        return;
+      }
       _inputController.clear();
       setState(() => _pendingFiles.clear());
     } catch (e) {
@@ -347,6 +372,18 @@ class _ChatPageState extends State<ChatPage> {
         });
       }
     }
+  }
+
+  bool _ackRejected(dynamic res) =>
+      res is Map &&
+      res['status'] != null &&
+      res['status'] != 'accepted' &&
+      res['status'] != 'noop' &&
+      res['status'] != 'duplicate';
+
+  String _ackReason(dynamic res) {
+    if (res is! Map) return '$res';
+    return '${res['reasonCode'] ?? res['message'] ?? res['status']}';
   }
 
   String _requireSession() {

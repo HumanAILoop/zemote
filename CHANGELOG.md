@@ -2,6 +2,12 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### Fixed
+- **新建会话首条消息可能发不出去**：普通文本首条消息改为随 `createSession(firstInput)` 一起发送（对齐官方 composer），避免订阅未就绪时命令被丢弃；附件/目标指令路径在发送前等待订阅建立。
+- **发送失败不再静默**：`sendText` / `sendGoalCommand` 的 ack 现在会被检查，被拒时提示具体原因。
+
 ## [0.3.0] - 2026-08-07
 
 ### Added
