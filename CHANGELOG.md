@@ -2,6 +2,11 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### Fixed
+- 打开聊天页时定位到最新消息（底部）；向上翻阅历史时流式更新不再拉扯；加载更早消息后若在底部自动回到最新。
+
 ## [0.3.3] - 2026-08-07
 
 ### Added

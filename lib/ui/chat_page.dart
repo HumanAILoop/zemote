@@ -63,6 +63,10 @@ class _ChatPageState extends State<ChatPage> {
   /// `config` to createSession on first send.
   final Map<String, String> _draftConfig = {};
 
+  /// Whether to keep the view pinned to the newest message. Starts true so
+  /// opening the chat lands at the bottom; the user scrolling up unpins it.
+  bool _stickToBottom = true;
+
   ConversationState? get _state => _subscription?.state;
 
   @override
@@ -70,6 +74,7 @@ class _ChatPageState extends State<ChatPage> {
     super.initState();
     _sessionId = widget.sessionId;
     _transport = widget.session.conversation(widget.scope);
+    _scrollController.addListener(_onScroll);
     if (_sessionId != null) {
       _subscribe();
     }
@@ -82,6 +87,12 @@ class _ChatPageState extends State<ChatPage> {
         setState(() => _showSlash = show);
       }
     });
+  }
+
+  void _onScroll() {
+    if (!_scrollController.hasClients) return;
+    final max = _scrollController.position.maxScrollExtent;
+    _stickToBottom = _scrollController.position.pixels >= max - 40;
   }
 
   Future<void> _loadPrep() async {
@@ -137,11 +148,14 @@ class _ChatPageState extends State<ChatPage> {
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients &&
-          _scrollController.position.pixels >
-              _scrollController.position.maxScrollExtent - 400) {
+      if (!_scrollController.hasClients) return;
+      final max = _scrollController.position.maxScrollExtent;
+      // Snap to the newest message on open; afterwards only follow while the
+      // user is already near the bottom (so reading history isn't yanked).
+      if (_stickToBottom ||
+          _scrollController.position.pixels > max - 400) {
         _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
+          max,
           duration: const Duration(milliseconds: 200),
           curve: Curves.easeOut,
         );
@@ -471,6 +485,9 @@ class _ChatPageState extends State<ChatPage> {
           ..sort((a, b) => ((a['rowId'] as num?) ?? 0)
               .compareTo((b['rowId'] as num?) ?? 0));
         state.prependOlderRows(older, firstRowId);
+        // Prepending shifts the content above; keep the newest message in
+        // view when the user is pinned to the bottom.
+        if (_stickToBottom) _scrollToBottom();
       } else if (state.rows.isNotEmpty) {
         _toast('没有更早的消息了');
       }
