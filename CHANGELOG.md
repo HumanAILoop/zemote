@@ -2,10 +2,20 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
-## [Unreleased]
+## [0.3.3] - 2026-08-07
 
 ### Added
-- **设备列表导入/导出**：设置页导出全部设备（JSON 文件，含连接 URL，带凭据安全提示）；可从文件导入，自动跳过无效/重复设备。
+- **设备列表导入/导出**：导出全部设备（JSON 文件，含连接 URL，带凭据安全提示）；可从文件导入，自动跳过无效/重复设备。
+- **同一条回复合并为单条气泡**：交错 tool/reasoning 时文本合并为一个气泡（一个点赞区）。
+
+### Fixed
+- 服务端 `bridge-degraded` 恢复失败不再卡死（并入重试循环）。
+- `sendText` 在连接健康时超时不再重复发送（仅断线中自动重试）。
+- `ZemoteClient.dispose()` 释放活动桥，修复连接泄漏。
+- 断线重连：bridge 恢复持续重试直到成功；relay 重连后卡在 waiting 自动强制重连；聊天页显示「正在自动重连」提示条。
+- 聊天配色（浅色主题代码块/推理/工具卡片）改为主题感知。
+- AI 询问用户（交互）按官方 schema 修正权限选项与自由输入，新增 `questions` 表单。
+- 新建会话首条消息随 `createSession(firstInput)` 发送，发送 ack 失败有明确提示。
 
 ## [0.3.2] - 2026-08-07
 
