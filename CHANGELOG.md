@@ -2,6 +2,14 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### Fixed
+- **断线后发消息超时**：relay 断开时立即标记 bridge 降级，命令在恢复前排队等待（`waitHealthy`）；发送超时后等待重连并自动重试一次；聊天页新增「正在自动重连」提示条。
+- **聊天配色异常（尤其浅色主题代码块）**：markdown 代码块/行内代码/推理与工具卡片背景改为主题感知色，浅色下不再白底白字。
+- **同一条回复被拆成多条消息**：会话分组不再因服务端 `turnId` 中途变化而拆散，一条回复合并为单条气泡（一个点赞区）。
+- **AI 询问用户（交互）弹窗显示不正确**：按官方 schema 修正权限请求选项、自由输入；新增 `questions` 表单渲染（单选/多选）。
+
 ## [0.3.1] - 2026-08-07
 
 ### Fixed

@@ -90,6 +90,36 @@ class ZInk {
   /// Hairline ink (dark: `Colors.white12`, light: slate-300).
   static Color hairline(BuildContext context) =>
       _isLight(context) ? _slate300 : Colors.white12;
+
+  /// Subtle tile fill (dark: white@4%, light: black@4%).
+  static Color tile(BuildContext context) =>
+      _isLight(context)
+          ? const Color(0x0A0F172A)
+          : Colors.white.withValues(alpha: 0.04);
+
+  /// Tile hairline border (dark: white@6%, light: black@6%).
+  static Color tileBorder(BuildContext context) =>
+      _isLight(context)
+          ? const Color(0x0F0F172A)
+          : Colors.white.withValues(alpha: 0.06);
+
+  /// Code block background (light: slate-100 so code stays readable).
+  static Color codeBlockBg(BuildContext context) =>
+      _isLight(context)
+          ? const Color(0xFFF1F5F9)
+          : Colors.black.withValues(alpha: 0.35);
+
+  /// Inline code background.
+  static Color codeInlineBg(BuildContext context) =>
+      _isLight(context)
+          ? const Color(0x140F172A)
+          : Colors.white.withValues(alpha: 0.08);
+
+  /// Code text (light: dark blue for contrast on the light block).
+  static Color codeText(BuildContext context) =>
+      _isLight(context)
+          ? const Color(0xFF1E3A8A)
+          : const Color(0xFF93C5FD);
 }
 
 ThemeData buildDarkTheme() {

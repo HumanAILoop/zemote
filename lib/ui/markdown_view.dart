@@ -38,8 +38,8 @@ class ZemoteMarkdown extends StatelessWidget {
       code: TextStyle(
         fontFamily: 'monospace',
         fontSize: codeFont,
-        backgroundColor: Colors.white.withValues(alpha: 0.08),
-        color: const Color(0xFF93C5FD),
+        backgroundColor: ZInk.codeInlineBg(context),
+        color: ZInk.codeText(context),
       ),
       codeblockDecoration: const BoxDecoration(),
       blockquote: TextStyle(
@@ -56,13 +56,13 @@ class ZemoteMarkdown extends StatelessWidget {
       tableHead: TextStyle(
           fontSize: fontSize - 1, fontWeight: FontWeight.w600),
       tableBorder: TableBorder.all(
-          color: Colors.white.withValues(alpha: 0.15), width: 1),
+          color: ZInk.hairline(context), width: 1),
       tableCellsPadding: const EdgeInsets.symmetric(
           horizontal: 8, vertical: 4),
       horizontalRuleDecoration: BoxDecoration(
         border: Border(
             top: BorderSide(
-                color: Colors.white.withValues(alpha: 0.12))),
+                color: ZInk.hairline(context))),
       ),
       a: const TextStyle(
           color: ZColors.running,
@@ -121,10 +121,9 @@ class _CodeBlock extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.35),
+        color: ZInk.codeBlockBg(context),
         borderRadius: BorderRadius.circular(10),
-        border:
-            Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        border: Border.all(color: ZInk.tileBorder(context)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -133,7 +132,7 @@ class _CodeBlock extends StatelessWidget {
             padding:
                 const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.04),
+              color: ZInk.tile(context),
               borderRadius: const BorderRadius.vertical(
                   top: Radius.circular(10)),
             ),
@@ -177,7 +176,7 @@ class _CodeBlock extends StatelessWidget {
                 fontFamily: 'monospace',
                 fontSize: fontSize - 1.5,
                 height: 1.5,
-                color: Colors.white.withValues(alpha: 0.9),
+                color: ZInk.codeText(context),
               ),
             ),
           ),

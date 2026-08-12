@@ -731,6 +731,7 @@ class _ChatPageState extends State<ChatPage> {
                         },
                       ),
           ),
+          _ReconnectBanner(bridge: _transport.session),
           if (state != null)
             AnimatedBuilder(
               animation: state,
@@ -800,30 +801,69 @@ class _ChatPageState extends State<ChatPage> {
 
 // ---------------------------------------------------------------- rows
 
+/// Shows while the bridge is degraded (relay drop / recovery in progress)
+/// so the user knows a send may be paused waiting to reconnect.
+class _ReconnectBanner extends StatelessWidget {
+  final BridgeSession bridge;
+
+  const _ReconnectBanner({required this.bridge});
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<String?>(
+      valueListenable: bridge.degraded,
+      builder: (context, degraded, _) {
+        if (degraded == null) return const SizedBox.shrink();
+        return Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          color: ZColors.warning.withValues(alpha: 0.15),
+          child: Row(
+            children: [
+              const SizedBox(
+                width: 12,
+                height: 12,
+                child: CircularProgressIndicator(strokeWidth: 1.5),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text('连接已断开，正在自动重连…',
+                    style: TextStyle(
+                        fontSize: 12, color: ZInk.soft(context))),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
 /// Groups rows into turns (mirrors the web timeline): a user message starts
 /// a new group; assistant text/reasoning/tool rows that follow belong to
 /// the same turn and render as ONE message instead of many bubbles.
+///
+/// A new group starts only on a user message (or the first assistant row
+/// after one). Consecutive assistant rows are merged into a single group
+/// EVEN IF the server bumps `turnId` mid-response, so one answer never
+/// splits into several bubbles each carrying its own feedback buttons.
 List<List<Map<String, dynamic>>> _groupRows(
     List<Map<String, dynamic>> rows) {
   final groups = <List<Map<String, dynamic>>>[];
   List<Map<String, dynamic>>? current;
-  String? currentTurnId;
   for (final row in rows) {
     final kind = row['kind'];
     if (kind == 'timelineMarker') {
       current = null;
-      currentTurnId = null;
       groups.add([row]);
       continue;
     }
-    final turnId = row['turnId'] as String?;
     final isUser = kind == 'userInput';
     final startsGroup = isUser ||
         current == null ||
-        (turnId != null && turnId != currentTurnId);
+        current.first['kind'] == 'userInput';
     if (startsGroup) {
       current = [row];
-      currentTurnId = turnId;
       groups.add(current);
     } else {
       current.add(row);
@@ -1205,7 +1245,7 @@ class _AttachmentViewState extends State<_AttachmentView> {
         margin: const EdgeInsets.only(bottom: 6),
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.08),
+          color: ZInk.tile(context),
           borderRadius: BorderRadius.circular(10),
         ),
         child: Row(
@@ -1354,9 +1394,9 @@ class _ReasoningTile extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.03),
+        color: ZInk.tile(context),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+        border: Border.all(color: ZInk.tileBorder(context)),
       ),
       child: ExpansionTile(
         dense: true,
@@ -1421,7 +1461,7 @@ class _ToolCallTile extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 3),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.04),
+        color: ZInk.tile(context),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -1490,15 +1530,16 @@ class _ToolCallTile extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.25),
+              color: ZInk.codeBlockBg(context),
               borderRadius: BorderRadius.circular(8),
             ),
             child: SelectableText(
               display.length > 4000
                   ? '${display.substring(0, 4000)}…'
                   : display,
-              style: const TextStyle(
-                  fontFamily: 'monospace', fontSize: 11),
+              style: TextStyle(
+                  fontFamily: 'monospace', fontSize: 11,
+                  color: ZInk.solid(context)),
             ),
           ),
         ],
@@ -1773,8 +1814,7 @@ class _ContextUsageBar extends StatelessWidget {
               child: LinearProgressIndicator(
                 value: ratio,
                 minHeight: 4,
-                backgroundColor:
-                    Colors.white.withValues(alpha: 0.08),
+                backgroundColor: ZInk.tile(context),
                 valueColor: AlwaysStoppedAnimation(color),
               ),
             ),
@@ -2079,7 +2119,7 @@ class _PendingFilesBar extends StatelessWidget {
       margin: const EdgeInsets.fromLTRB(14, 4, 14, 0),
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
+        color: ZInk.tile(context),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -2129,13 +2169,14 @@ class _PendingInteractions extends StatelessWidget {
         for (final interaction in interactions)
           _InteractionCard(
             interaction: interaction,
-            onResolve: ({optionId, freeText, action}) =>
+            onResolve: ({optionId, freeText, action, content}) =>
                 transport.resolveInteraction(
               sessionId,
               interaction['interactionId'] as String? ?? '',
               optionId: optionId,
               freeText: freeText,
               action: action,
+              content: content,
             ),
           ),
       ],
@@ -2145,8 +2186,12 @@ class _PendingInteractions extends StatelessWidget {
 
 class _InteractionCard extends StatefulWidget {
   final Map<String, dynamic> interaction;
-  final Future<dynamic> Function(
-      {String? optionId, String? freeText, String? action}) onResolve;
+  final Future<dynamic> Function({
+    String? optionId,
+    String? freeText,
+    String? action,
+    Map<String, dynamic>? content,
+  }) onResolve;
 
   const _InteractionCard({required this.interaction, required this.onResolve});
 
@@ -2164,13 +2209,20 @@ class _InteractionCardState extends State<_InteractionCard> {
     super.dispose();
   }
 
-  Future<void> _resolve(
-      {String? optionId, String? freeText, String? action}) async {
+  Future<void> _resolve({
+    String? optionId,
+    String? freeText,
+    String? action,
+    Map<String, dynamic>? content,
+  }) async {
     if (_busy) return;
     setState(() => _busy = true);
     try {
       await widget.onResolve(
-          optionId: optionId, freeText: freeText, action: action);
+          optionId: optionId,
+          freeText: freeText,
+          action: action,
+          content: content);
     } catch (_) {
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -2183,6 +2235,12 @@ class _InteractionCardState extends State<_InteractionCard> {
     if (payload is! Map) return const SizedBox.shrink();
     final kind = payload['kind'];
     final options = payload['options'];
+    final questions = payload['questions'];
+    final freeText = payload['freeText'] == true;
+
+    final title = kind == 'permission'
+        ? '权限请求 · ${payload['toolName'] ?? ''}'
+        : '等待你的输入';
 
     return Container(
       margin: const EdgeInsets.fromLTRB(14, 4, 14, 0),
@@ -2203,14 +2261,20 @@ class _InteractionCardState extends State<_InteractionCard> {
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
-                  kind == 'permission'
-                      ? '权限请求 · ${payload['toolName'] ?? ''}'
-                      : '等待输入 · ${payload['prompt'] ?? ''}',
+                  title,
                   style: const TextStyle(fontSize: 13),
                 ),
               ),
             ],
           ),
+          if (kind == 'userInput' &&
+              (payload['prompt'] as String? ?? '').isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text('${payload['prompt']}',
+                  style: TextStyle(
+                      fontSize: 12, color: ZInk.soft(context))),
+            ),
           if (kind == 'permission' && payload['summary'] != null)
             Padding(
               padding: const EdgeInsets.only(top: 6),
@@ -2219,7 +2283,7 @@ class _InteractionCardState extends State<_InteractionCard> {
                       fontSize: 12, color: ZInk.soft(context))),
             ),
           const SizedBox(height: 8),
-          if (options is List)
+          if (options is List && options.isNotEmpty)
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -2234,15 +2298,22 @@ class _InteractionCardState extends State<_InteractionCard> {
                       ),
                       onPressed: _busy
                           ? null
-                          : () =>
-                              _resolve(optionId: '${option['optionId']}'),
+                          : () => _resolve(optionId: '${option['optionId']}'),
                       child: Text(
-                          '${option['label'] ?? option['optionId']}',
-                          style: const TextStyle(fontSize: 12)),
+                        _optionLabel(option),
+                        style: const TextStyle(fontSize: 12),
+                      ),
                     ),
               ],
             ),
-          if (payload['freeText'] == true)
+          if (questions is List && questions.isNotEmpty)
+            _QuestionsView(
+              questions: questions.cast<Map>(),
+              busy: _busy,
+              onResolve: (question, selected) =>
+                  _resolve(content: {question: selected}),
+            ),
+          if (freeText)
             Row(
               children: [
                 Expanded(
@@ -2264,6 +2335,141 @@ class _InteractionCardState extends State<_InteractionCard> {
                           freeText: _freeTextController.text.trim()),
                 ),
               ],
+            ),
+        ],
+      ),
+    );
+  }
+
+  String _optionLabel(Map option) {
+    final label = option['label'] as String?;
+    if (label != null && label.isNotEmpty) return label;
+    final kind = option['kind'] as String?;
+    return switch (kind) {
+      'allowOnce' => '允许一次',
+      'allowAlways' => '总是允许',
+      'deny' => '拒绝',
+      'custom' => '自定义',
+      _ => '${option['optionId'] ?? '选择'}',
+    };
+  }
+}
+
+/// Renders a form-style `userInput` interaction (the `questions` payload):
+/// the current question (by `currentQuestionIndex`) with its options.
+class _QuestionsView extends StatelessWidget {
+  final List<Map> questions;
+  final bool busy;
+  final void Function(String question, List<String> selected) onResolve;
+
+  const _QuestionsView({
+    required this.questions,
+    required this.busy,
+    required this.onResolve,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (var i = 0; i < questions.length; i++)
+          _QuestionItem(
+            index: i,
+            question: questions[i],
+            busy: busy,
+            onSelect: (selected) =>
+                onResolve('${questions[i]['value'] ?? 'answer_$i'}', selected),
+          ),
+      ],
+    );
+  }
+}
+
+class _QuestionItem extends StatefulWidget {
+  final int index;
+  final Map question;
+  final bool busy;
+  final void Function(List<String> selected) onSelect;
+
+  const _QuestionItem({
+    required this.index,
+    required this.question,
+    required this.busy,
+    required this.onSelect,
+  });
+
+  @override
+  State<_QuestionItem> createState() => _QuestionItemState();
+}
+
+class _QuestionItemState extends State<_QuestionItem> {
+  final List<String> _selected = [];
+
+  @override
+  Widget build(BuildContext context) {
+    final q = widget.question;
+    final label = q['label'] ?? q['question'] ?? q['value'] ?? '';
+    final options = q['options'];
+    final multi = q['multiSelect'] == true;
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('${widget.index + 1}. $label',
+              style: const TextStyle(fontSize: 12, height: 1.4)),
+          if (q['description'] != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text('${q['description']}',
+                  style: TextStyle(
+                      fontSize: 11, color: ZInk.faint(context))),
+            ),
+          if (options is List && options.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: [
+                  for (final o in options)
+                    if (o is Map)
+                      FilterChip(
+                        label: Text('${o['label'] ?? o['value'] ?? ''}',
+                            style: const TextStyle(fontSize: 12)),
+                        selected: _selected.contains('${o['value']}'),
+                        onSelected: widget.busy
+                            ? null
+                            : (on) {
+                                setState(() {
+                                  if (multi) {
+                                    if (on) {
+                                      _selected.add('${o['value']}');
+                                    } else {
+                                      _selected.remove('${o['value']}');
+                                    }
+                                  } else {
+                                    _selected
+                                      ..clear()
+                                      ..add('${o['value']}');
+                                  }
+                                });
+                                if (!multi) widget.onSelect(List.of(_selected));
+                              },
+                      ),
+                ],
+              ),
+            ),
+          if (multi)
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: widget.busy
+                    ? null
+                    : () => widget.onSelect(List.of(_selected)),
+                child: const Text('提交', style: TextStyle(fontSize: 12)),
+              ),
             ),
         ],
       ),

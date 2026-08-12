@@ -138,6 +138,10 @@ class ConversationTransport {
     Duration timeout = const Duration(seconds: 30),
   }) async {
     await handshake();
+    // Gate on a healthy bridge: during a relay drop/recovery the old bridge
+    // is dead and requests would otherwise hang until timeout. Once the
+    // bridge recovers, the send goes through on the fresh transport.
+    await session.waitHealthy(timeout: const Duration(seconds: 45));
     final sub =
         sessionId == null ? null : _subscriptions[sessionId];
     final baseRevision = sessionId == null
@@ -159,9 +163,7 @@ class ConversationTransport {
       'issuedAt': DateTime.now().millisecondsSinceEpoch,
     };
     _log('[v4] command $type');
-    var res = await _channels.call(channel, 'sendConversationCommandV4', [
-      {...scope, 'envelope': envelope},
-    ], timeout: timeout);
+    var res = await _sendCommandWithRetry(envelope, timeout);
     // Runtime events (turn completion etc.) also bump the revision, so a
     // CAS base can go stale even with ack tracking. The stale ack tells
     // the server's current revision — retry once with it (mirrors the
@@ -182,9 +184,7 @@ class ConversationTransport {
         'baseRevision': serverRevision,
         'issuedAt': DateTime.now().millisecondsSinceEpoch,
       };
-      res = await _channels.call(channel, 'sendConversationCommandV4', [
-        {...scope, 'envelope': retryEnvelope},
-      ], timeout: timeout);
+      res = await _sendCommandWithRetry(retryEnvelope, timeout);
     }
     if (sessionId != null &&
         res is Map &&
@@ -202,6 +202,28 @@ class ConversationTransport {
       }
     }
     return res;
+  }
+
+  /// Sends one command envelope; on timeout (likely a relay drop mid-flight)
+  /// waits for bridge recovery and retries once with a fresh commandId.
+  Future<dynamic> _sendCommandWithRetry(
+      Map<String, dynamic> envelope, Duration timeout) async {
+    try {
+      return await _channels.call(channel, 'sendConversationCommandV4', [
+        {...scope, 'envelope': envelope},
+      ], timeout: timeout);
+    } on TimeoutException {
+      _log('[v4] command timed out, waiting for recovery and retrying');
+      await session.waitHealthy(timeout: const Duration(seconds: 45));
+      final fresh = {
+        ...envelope,
+        'commandId': generateUuid(),
+        'issuedAt': DateTime.now().millisecondsSinceEpoch,
+      };
+      return _channels.call(channel, 'sendConversationCommandV4', [
+        {...scope, 'envelope': fresh},
+      ], timeout: timeout);
+    }
   }
 
   /// Creates a new session (mirrors the composer's first-send path):
@@ -587,6 +609,7 @@ class ConversationTransport {
     String? optionId,
     String? freeText,
     String? action,
+    Map<String, dynamic>? content,
   }) =>
       sendCommand(sessionId, 'resolveInteraction', {
         'interactionId': interactionId,
@@ -594,6 +617,7 @@ class ConversationTransport {
           if (optionId != null) 'optionId': optionId,
           if (freeText != null) 'freeText': freeText,
           if (action != null) 'action': action,
+          if (content != null) 'content': content,
         },
       });
 

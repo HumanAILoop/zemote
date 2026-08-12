@@ -49,7 +49,14 @@ class ZemoteClient {
   void _onRelayState() {
     final state = relay.state;
     if (state == RelayState.reconnecting || state == RelayState.error) {
-      if (_activeBridges.isNotEmpty) _needsBridgeRecovery = true;
+      if (_activeBridges.isNotEmpty) {
+        _needsBridgeRecovery = true;
+        // Mark bridges degraded immediately so in-flight commands gate on
+        // recovery instead of timing out on the now-dead socket/bridge.
+        for (final s in _activeBridges) {
+          if (s.degraded.value == null) s.degraded.value = 'reconnecting';
+        }
+      }
       return;
     }
     if (state == RelayState.paired && _needsBridgeRecovery) {
@@ -425,6 +432,26 @@ class BridgeSession {
   /// Bumped when the bridge recovers/reopens — subscriptions must
   /// resubscribe (server-side subscription state died with the old bridge).
   final ValueNotifier<int> recovered = ValueNotifier(0);
+
+  /// Resolves once the bridge is healthy again (degraded cleared), or throws
+  /// [TimeoutException]. Commands gate on this so a send during a
+  /// reconnect/recovery window doesn't hang on a dead bridge.
+  Future<void> waitHealthy({Duration timeout = const Duration(seconds: 45)}) {
+    if (_disposed || degraded.value == null) return Future.value();
+    final completer = Completer<void>();
+    void check() {
+      if (degraded.value == null && !completer.isCompleted) {
+        completer.complete();
+      }
+    }
+
+    degraded.addListener(check);
+    check();
+    return completer.future.timeout(timeout, onTimeout: () {
+      degraded.removeListener(check);
+      throw TimeoutException('bridge 恢复超时: ${degraded.value}');
+    }).whenComplete(() => degraded.removeListener(check));
+  }
 
   BridgeSession._({
     required Map<String, dynamic> bridge,
