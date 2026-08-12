@@ -2,6 +2,11 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### Added
+- **设备列表导入/导出**：设置页导出全部设备（JSON 文件，含连接 URL，带凭据安全提示）；可从文件导入，自动跳过无效/重复设备。
+
 ## [0.3.2] - 2026-08-07
 
 ### Fixed

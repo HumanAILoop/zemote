@@ -1,4 +1,9 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../protocol/relay_client.dart';
 import '../state/account_store.dart';
@@ -28,6 +33,78 @@ class _AccountsPageState extends State<AccountsPage> {
       widget.store.load().then((_) {
         if (mounted) setState(() {});
       });
+    }
+  }
+
+  /// Exports all devices to a JSON file (backup / transfer). The connection
+  /// URLs contain credentials — warn the user before sharing.
+  Future<void> _exportDevices(BuildContext context) async {
+    final json = widget.store.exportJson();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('导出设备'),
+        content: const Text(
+            '将导出全部设备及连接 URL。\n⚠️ URL 包含设备凭据，相当于密码，请妥善保管，勿分享给他人。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('导出'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !context.mounted) return;
+    try {
+      final path = await FilePicker.saveFile(
+        dialogTitle: '导出设备',
+        fileName: 'zemote-devices.json',
+        bytes: utf8.encode(json),
+      );
+      if (path == null) return; // cancelled
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content:
+                Text('已导出 ${widget.store.accounts.length} 台设备')));
+      }
+    } catch (e) {
+      // Fallback: hand the JSON to the user via clipboard.
+      await Clipboard.setData(ClipboardData(text: json));
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('保存文件失败，已将导出内容复制到剪贴板')));
+      }
+    }
+  }
+
+  /// Imports devices from a JSON export file.
+  Future<void> _importDevices(BuildContext context) async {
+    try {
+      final result = await FilePicker.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: ['json'],
+      );
+      if (result == null || result.files.isEmpty) return;
+      final file = result.files.first;
+      var bytes = file.bytes;
+      if (bytes == null && file.path != null) {
+        bytes = await File(file.path!).readAsBytes();
+      }
+      if (bytes == null) return;
+      final count = await widget.store.importJson(utf8.decode(bytes));
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+              count > 0 ? '导入 $count 台设备' : '没有可导入的新设备')));
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('导入失败: $e')));
+      }
     }
   }
 
@@ -225,6 +302,17 @@ class _AccountsPageState extends State<AccountsPage> {
                 tooltip: '协议日志',
                 onPressed: () => Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const LogPage())),
+              ),
+              PopupMenuButton<String>(
+                tooltip: '更多',
+                onSelected: (v) {
+                  if (v == 'import') _importDevices(context);
+                  if (v == 'export') _exportDevices(context);
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'import', child: Text('导入设备')),
+                  PopupMenuItem(value: 'export', child: Text('导出设备')),
+                ],
               ),
             ],
           ),

@@ -124,4 +124,40 @@ class AccountStore extends ChangeNotifier {
     await _save();
     notifyListeners();
   }
+
+  /// Serializes all devices (including their connection URLs) to JSON for
+  /// backup / transfer. Note: URLs contain credentials — treat the export
+  /// like a password file.
+  String exportJson() => jsonEncode({
+        'app': 'zemote',
+        'format': 'devices',
+        'version': 1,
+        'exportedAt': DateTime.now().toIso8601String(),
+        'accounts': _accounts.map((a) => a.toJson()).toList(),
+      });
+
+  /// Restores devices from an export. Skips invalid URLs and duplicates
+  /// (matched by connection URL). Returns how many were imported.
+  Future<int> importJson(String raw) async {
+    final decoded = jsonDecode(raw);
+    final list = decoded is Map ? decoded['accounts'] : decoded;
+    if (list is! List) {
+      throw const FormatException('不是有效的设备导出文件');
+    }
+    var added = 0;
+    for (final item in list) {
+      if (item is! Map) continue;
+      final account = Account.fromJson(item.cast<String, dynamic>());
+      if (account.url.isEmpty) continue;
+      if (ZemoteConnectionParams.parse(account.url) == null) continue;
+      if (_accounts.any((a) => a.url == account.url)) continue;
+      _accounts.add(account);
+      added++;
+    }
+    if (added > 0) {
+      await _save();
+      notifyListeners();
+    }
+    return added;
+  }
 }
