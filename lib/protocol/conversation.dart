@@ -213,7 +213,12 @@ class ConversationTransport {
         {...scope, 'envelope': envelope},
       ], timeout: timeout);
     } on TimeoutException {
-      _log('[v4] command timed out, waiting for recovery and retrying');
+      // Retry only when the relay dropped mid-flight (bridge degraded): the
+      // command then never reached the server. If the bridge is still
+      // healthy, rethrow — a retry would double-deliver (e.g. sendText).
+      if (session.degraded.value == null) rethrow;
+      _log('[v4] command timed out during drop, waiting for recovery and '
+          'retrying');
       await session.waitHealthy(timeout: const Duration(seconds: 45));
       final fresh = {
         ...envelope,

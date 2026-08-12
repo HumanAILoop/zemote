@@ -96,7 +96,11 @@ class ZemoteClient {
   /// Returns true when the bridge is healthy again.
   Future<bool> _recoverBridgeOnce(BridgeSession session) async {
     final workspaceKey = session.bridge['workspaceKey'] as String?;
-    if (workspaceKey == null) return true;
+    if (workspaceKey == null) {
+      // Nothing to reconnect; clear the degraded flag so commands unblock.
+      session.degraded.value = null;
+      return true;
+    }
     session.degraded.value = 'recovering';
     // 1) cheap path: workspace-reconnect-request
     try {
@@ -240,41 +244,20 @@ class ZemoteClient {
       <String, List<Map<String, dynamic>>>{};
 
   /// bridge-degraded (e.g. `rpc-transport-fault`): the desktop stopped the
-  /// bridge transport. Recover via `workspace-reconnect-request`
-  /// (mirrors the web client's recovery path), then notify listeners so
-  /// subscriptions can resync.
+  /// bridge transport. Mark it degraded and kick off the retrying recovery
+  /// loop (mirrors the web client's recovery path) so it never stays stuck.
   Future<void> _handleBridgeDegraded(Map<String, dynamic> payload) async {
     final bridgeSessionId = payload['bridgeSessionId'] as String?;
     final reason = payload['reason'] as String?;
     _log('[bridge] degraded: $bridgeSessionId reason=$reason');
+    var found = false;
     for (final session in _activeBridges) {
       if (session.bridge['bridgeSessionId'] == bridgeSessionId) {
         session.degraded.value = reason ?? 'unknown';
+        found = true;
       }
     }
-    final workspaceKey = _activeBridges
-        .where((s) => s.bridge['bridgeSessionId'] == bridgeSessionId)
-        .map((s) => s.bridge['workspaceKey'] as String?)
-        .firstOrNull;
-    if (workspaceKey == null) return;
-    try {
-      final res = await reconnectWorkspace(workspaceKey);
-      final success = res['success'] == true;
-      _log('[bridge] reconnect $workspaceKey success=$success');
-      for (final session in _activeBridges) {
-        if (session.bridge['bridgeSessionId'] == bridgeSessionId) {
-          if (success) {
-            session.degraded.value = null;
-            session.recovered.value += 1;
-          } else {
-            session.degraded.value =
-                '${res['error'] ?? 'reconnect-failed'}';
-          }
-        }
-      }
-    } catch (e) {
-      _log('[bridge] reconnect failed: $e');
-    }
+    if (found) _recoverActiveBridges();
   }
 
   /// workspace-bridge-open -> workspace-bridge-ready, then builds the
@@ -438,6 +421,9 @@ class ZemoteClient {
   Future<void> dispose() async {
     relay.stateListenable.removeListener(_onRelayState);
     await _payloadSub?.cancel();
+    for (final s in List<BridgeSession>.from(_activeBridges)) {
+      s.dispose();
+    }
     await relay.dispose();
     await _workspaceListUpdatedController.close();
   }
