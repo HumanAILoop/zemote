@@ -2,7 +2,7 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
-## [Unreleased]
+## [0.3.2] - 2026-08-07
 
 ### Fixed
 - **断线后发消息超时**：relay 断开时立即标记 bridge 降级，命令在恢复前排队等待（`waitHealthy`）；发送超时后等待重连并自动重试一次；聊天页新增「正在自动重连」提示条。
