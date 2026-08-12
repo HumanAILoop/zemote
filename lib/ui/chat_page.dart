@@ -839,6 +839,35 @@ class _ReconnectBanner extends StatelessWidget {
   }
 }
 
+/// Splits an assistant-turn group into ONE merged text block plus the
+/// non-text rows (tool/reasoning/subagent), so the reply renders as a single
+/// bubble with a single feedback area even when text and tool rows interleave.
+({String text, List<Map<String, dynamic>> tiles, Map<String, dynamic>? header, bool streaming})
+    assistantTurnParts(List<Map<String, dynamic>> rows) {
+  final textParts = <String>[];
+  final tiles = <Map<String, dynamic>>[];
+  Map<String, dynamic>? header;
+  var anyStreaming = false;
+  for (final row in rows) {
+    final kind = row['kind'];
+    if (kind == 'assistantText') {
+      final t = row['text'] as String? ?? '';
+      if (t.trim().isNotEmpty) textParts.add(t);
+      if (row['state'] == 'streaming') anyStreaming = true;
+    } else if (kind == 'turnHeader') {
+      header = row;
+    } else {
+      tiles.add(row);
+    }
+  }
+  return (
+    text: textParts.join('\n\n'),
+    tiles: tiles,
+    header: header,
+    streaming: anyStreaming,
+  );
+}
+
 /// Groups rows into turns (mirrors the web timeline): a user message starts
 /// a new group; assistant text/reasoning/tool rows that follow belong to
 /// the same turn and render as ONE message instead of many bubbles.
@@ -917,58 +946,47 @@ class _TurnGroupWidget extends StatelessWidget {
         ],
       );
     }
-    // assistant turn: merge consecutive assistantText rows into one block
-    final merged = <Map<String, dynamic>>[];
-    final textBuffer = StringBuffer();
-    Map<String, dynamic>? textTemplate;
-    var anyStreaming = false;
-    void flushText() {
-      if (textTemplate != null) {
-        merged.add({
-          ...textTemplate!,
-          'text': textBuffer.toString().trim(),
-          if (anyStreaming) 'state': 'streaming',
-        });
-        textBuffer.clear();
-        textTemplate = null;
-        anyStreaming = false;
+    // assistant turn: ONE bubble for all assistant text regardless of
+    // interleaved tool/reasoning/subagent rows (each such row used to split
+    // the reply into many bubbles, each carrying its own feedback buttons).
+    final parts = assistantTurnParts(rows);
+    Map<String, dynamic>? template;
+    for (final r in rows) {
+      if (r['kind'] == 'assistantText') {
+        template = r;
+        break;
       }
     }
-
-    for (final row in rows) {
-      if (row['kind'] == 'assistantText') {
-        textTemplate ??= row;
-        if (textBuffer.isNotEmpty) textBuffer.write('\n\n');
-        textBuffer.write(row['text'] as String? ?? '');
-        if (row['state'] == 'streaming') anyStreaming = true;
-      } else if (row['kind'] == 'turnHeader') {
-        // keep header at the group tail for status display
-        continue;
-      } else {
-        flushText();
-        merged.add(row);
-      }
+    final children = <Widget>[];
+    if (parts.text.isNotEmpty) {
+      children.add(_RowWidget(
+        row: {
+          if (template != null) ...template,
+          'kind': 'assistantText',
+          'text': parts.text,
+          if (parts.streaming) 'state': 'streaming',
+        },
+        transport: transport,
+        sessionId: sessionId,
+        onAction: onAction,
+        state: state,
+      ));
     }
-    flushText();
-
-    final header = rows
-        .where((r) => r['kind'] == 'turnHeader')
-        .cast<Map<String, dynamic>?>()
-        .firstOrNull;
-
+    for (final row in parts.tiles) {
+      children.add(_RowWidget(
+        row: row,
+        transport: transport,
+        sessionId: sessionId,
+        onAction: onAction,
+        state: state,
+      ));
+    }
+    final header = parts.header;
+    if (header != null) children.add(_TurnHeader(row: header));
+    if (children.isEmpty) return const SizedBox.shrink();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        for (final row in merged)
-          _RowWidget(
-            row: row,
-            transport: transport,
-            sessionId: sessionId,
-            onAction: onAction,
-            state: state,
-          ),
-        if (header != null) _TurnHeader(row: header),
-      ],
+      children: children,
     );
   }
 }

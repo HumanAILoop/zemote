@@ -58,6 +58,7 @@ class RelayClient {
   static const heartbeatInterval = Duration(seconds: 10);
   static const heartbeatAckTimeout = Duration(seconds: 30);
   static const waitingTimeout = Duration(seconds: 30);
+  static const reconnectWaitTimeout = Duration(seconds: 20);
 
   WebSocketChannel? _socket;
   StreamSubscription? _socketSub;
@@ -82,6 +83,7 @@ class RelayClient {
   Timer? _heartbeatTimer;
   Timer? _waitingTimer;
   Timer? _reconnectTimer;
+  Timer? _rewaitTimer;
 
   RelayClient(this.params, {this.onLog});
 
@@ -233,6 +235,16 @@ class RelayClient {
         _clearWaitingTimer();
         _setState(RelayState.waiting);
         _startHeartbeat();
+        // A reconnecting mobile that was already paired should be matched
+        // immediately; if the server keeps saying "waiting", force another
+        // reconnect instead of hanging forever.
+        _rewaitTimer?.cancel();
+        _rewaitTimer = Timer(reconnectWaitTimeout, () {
+          if (_wasPaired && state == RelayState.waiting && !_disposed) {
+            _log('[relay] re-pair stuck in waiting, reconnecting');
+            _reconnect();
+          }
+        });
       } else {
         _setState(RelayState.waiting);
         _startWaitingTimer();
@@ -240,6 +252,7 @@ class RelayClient {
       return;
     }
     if (status == 'matched') {
+      _rewaitTimer?.cancel();
       _reconnectAttempt = 0;
       _clearWaitingTimer();
       _setState(RelayState.paired);
@@ -310,7 +323,10 @@ class RelayClient {
     });
   }
 
-  void _clearWaitingTimer() => _waitingTimer?.cancel();
+  void _clearWaitingTimer() {
+    _waitingTimer?.cancel();
+    _rewaitTimer?.cancel();
+  }
 
   void _scheduleReconnect() {
     if (_disposed || _intentionallyClosed) return;
@@ -350,6 +366,7 @@ class RelayClient {
     _stopHeartbeat();
     _clearWaitingTimer();
     _reconnectTimer?.cancel();
+    _rewaitTimer?.cancel();
     await _socketSub?.cancel();
     _socket?.sink.close();
     _setState(RelayState.closed);

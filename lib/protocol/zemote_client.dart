@@ -68,13 +68,35 @@ class ZemoteClient {
   Future<void> _recoverActiveBridges() async {
     _log('[bridge] recovering ${_activeBridges.length} bridge(s)');
     for (final session in List<BridgeSession>.from(_activeBridges)) {
-      await _recoverBridge(session);
+      if (_recoveringBridges.contains(session)) continue;
+      _recoveringBridges.add(session);
+      unawaited(_recoverBridgeWithRetry(session));
     }
   }
 
-  Future<void> _recoverBridge(BridgeSession session) async {
+  final Set<BridgeSession> _recoveringBridges = {};
+
+  /// Retries bridge recovery until it succeeds, so a degraded bridge never
+  /// strands commands ("can't send after reconnect"). A relay re-drop during
+  /// the retries just prolongs the loop.
+  Future<void> _recoverBridgeWithRetry(BridgeSession session) async {
+    try {
+      for (var attempt = 1; attempt <= 15; attempt++) {
+        if (session._disposed) return;
+        if (await _recoverBridgeOnce(session)) return;
+        if (session._disposed) return;
+        _log('[bridge] recovery attempt $attempt failed, retrying');
+        await Future.delayed(const Duration(seconds: 3));
+      }
+    } finally {
+      _recoveringBridges.remove(session);
+    }
+  }
+
+  /// Returns true when the bridge is healthy again.
+  Future<bool> _recoverBridgeOnce(BridgeSession session) async {
     final workspaceKey = session.bridge['workspaceKey'] as String?;
-    if (workspaceKey == null) return;
+    if (workspaceKey == null) return true;
     session.degraded.value = 'recovering';
     // 1) cheap path: workspace-reconnect-request
     try {
@@ -84,7 +106,7 @@ class ZemoteClient {
         _log('[bridge] reconnected $workspaceKey');
         session.degraded.value = null;
         session.recovered.value += 1;
-        return;
+        return true;
       }
     } catch (e) {
       _log('[bridge] reconnect-request failed: $e');
@@ -95,9 +117,11 @@ class ZemoteClient {
       await _reopenBridge(session, workspaceKey);
       session.degraded.value = null;
       session.recovered.value += 1;
+      return true;
     } catch (e) {
       _log('[bridge] reopen failed: $e');
       session.degraded.value = 'reopen-failed: $e';
+      return false;
     }
   }
 
