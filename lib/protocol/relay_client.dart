@@ -343,6 +343,10 @@ class RelayClient {
 
   Future<void> _reconnect() async {
     _reconnectTimer?.cancel();
+    // Go through `reconnecting` so listeners (bridge recovery) know the
+    // connection dropped — the heartbeat-timeout path used to skip this and
+    // bridges were never recovered after re-pairing.
+    _setState(RelayState.reconnecting);
     await _connect();
   }
 

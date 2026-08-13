@@ -139,8 +139,11 @@ class _ChatPageState extends State<ChatPage> {
       // The official client shows the full history immediately, so
       // auto-load the missing older rows once on open.
       if (sub.state.canLoadOlder) {
-        _loadOlder();
+        await _loadOlder();
       }
+      // Explicitly position at the newest message: the state listener only
+      // fires on LATER updates and misses the initial snapshot.
+      _scrollToBottom();
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
     }
