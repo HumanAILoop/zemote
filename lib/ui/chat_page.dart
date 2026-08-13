@@ -856,32 +856,61 @@ class _ReconnectBanner extends StatelessWidget {
   }
 }
 
-/// Splits an assistant-turn group into ONE merged text block plus the
-/// non-text rows (tool/reasoning/subagent), so the reply renders as a single
-/// bubble with a single feedback area even when text and tool rows interleave.
-({String text, List<Map<String, dynamic>> tiles, Map<String, dynamic>? header, bool streaming})
+/// Splits an assistant-turn group into ordered text segments (consecutive
+/// assistantText rows merged) plus the non-text rows, PRESERVING the original
+/// order (reasoning/tool rows stay where they occurred). Feedback buttons are
+/// rendered once, on the last text segment.
+({List<Map<String, dynamic>> segments, List<Map<String, dynamic>> tiles, Map<String, dynamic>? header, bool streaming})
     assistantTurnParts(List<Map<String, dynamic>> rows) {
-  final textParts = <String>[];
+  final segments = <Map<String, dynamic>>[];
   final tiles = <Map<String, dynamic>>[];
   Map<String, dynamic>? header;
-  var anyStreaming = false;
+  StringBuffer? buf;
+  Map<String, dynamic>? template;
+  var anyStream = false;
+  var sawStreaming = false;
+
+  void flushText() {
+    if (template != null) {
+      final text = buf!.toString().trim();
+      if (text.isNotEmpty) {
+        segments.add({
+          ...template!,
+          'text': text,
+          if (anyStream) 'state': 'streaming',
+        });
+      }
+      buf = null;
+      template = null;
+      anyStream = false;
+    }
+  }
+
   for (final row in rows) {
     final kind = row['kind'];
     if (kind == 'assistantText') {
+      template ??= row;
+      buf ??= StringBuffer();
       final t = row['text'] as String? ?? '';
-      if (t.trim().isNotEmpty) textParts.add(t);
-      if (row['state'] == 'streaming') anyStreaming = true;
+      if (buf!.isNotEmpty) buf!.write('\n\n');
+      buf!.write(t);
+      if (row['state'] == 'streaming') {
+        anyStream = true;
+        sawStreaming = true;
+      }
     } else if (kind == 'turnHeader') {
       header = row;
     } else {
+      flushText();
       tiles.add(row);
     }
   }
+  flushText();
   return (
-    text: textParts.join('\n\n'),
+    segments: segments,
     tiles: tiles,
     header: header,
-    streaming: anyStreaming,
+    streaming: sawStreaming,
   );
 }
 
@@ -963,26 +992,15 @@ class _TurnGroupWidget extends StatelessWidget {
         ],
       );
     }
-    // assistant turn: ONE bubble for all assistant text regardless of
-    // interleaved tool/reasoning/subagent rows (each such row used to split
-    // the reply into many bubbles, each carrying its own feedback buttons).
+    // assistant turn: preserve the original order (reasoning → text → tool
+    // → text …). Consecutive assistantText rows merge into one segment, and
+    // the feedback buttons appear only on the LAST text segment.
     final parts = assistantTurnParts(rows);
-    Map<String, dynamic>? template;
-    for (final r in rows) {
-      if (r['kind'] == 'assistantText') {
-        template = r;
-        break;
-      }
-    }
     final children = <Widget>[];
-    if (parts.text.isNotEmpty) {
+    for (var i = 0; i < parts.segments.length; i++) {
       children.add(_RowWidget(
-        row: {
-          if (template != null) ...template,
-          'kind': 'assistantText',
-          'text': parts.text,
-          if (parts.streaming) 'state': 'streaming',
-        },
+        row: parts.segments[i],
+        showFeedback: i == parts.segments.length - 1,
         transport: transport,
         sessionId: sessionId,
         onAction: onAction,
@@ -992,6 +1010,7 @@ class _TurnGroupWidget extends StatelessWidget {
     for (final row in parts.tiles) {
       children.add(_RowWidget(
         row: row,
+        showFeedback: false,
         transport: transport,
         sessionId: sessionId,
         onAction: onAction,
@@ -1014,6 +1033,7 @@ class _RowWidget extends StatelessWidget {
   final String sessionId;
   final Future<void> Function(String, Future<dynamic> Function()) onAction;
   final ConversationState state;
+  final bool showFeedback;
 
   const _RowWidget({
     required this.row,
@@ -1021,6 +1041,7 @@ class _RowWidget extends StatelessWidget {
     required this.sessionId,
     required this.onAction,
     required this.state,
+    this.showFeedback = true,
   });
 
   Map<String, dynamic> get _target => {
@@ -1163,7 +1184,7 @@ class _RowWidget extends StatelessWidget {
           sessionId: sessionId),
       'assistantText' => _AssistantBubble(
           row: row, transport: transport, sessionId: sessionId,
-          state: state),
+          state: state, showFeedback: showFeedback),
       'reasoning' => _ReasoningTile(
           text: row['text'] as String? ?? '',
           streaming: row['state'] == 'streaming'),
@@ -1329,12 +1350,14 @@ class _AssistantBubble extends StatelessWidget {
   final ConversationTransport transport;
   final String sessionId;
   final ConversationState state;
+  final bool showFeedback;
 
   const _AssistantBubble({
     required this.row,
     required this.transport,
     required this.sessionId,
     required this.state,
+    this.showFeedback = true,
   });
 
   void _setFeedback(String? value) {
@@ -1362,34 +1385,35 @@ class _AssistantBubble extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ZemoteMarkdown(text),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (streaming)
-                const Padding(
-                  padding: EdgeInsets.only(top: 6),
-                  child: SizedBox(
-                    width: 12,
-                    height: 12,
-                    child: CircularProgressIndicator(strokeWidth: 1.5),
+          if (showFeedback)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (streaming)
+                  const Padding(
+                    padding: EdgeInsets.only(top: 6),
+                    child: SizedBox(
+                      width: 12,
+                      height: 12,
+                      child: CircularProgressIndicator(strokeWidth: 1.5),
+                    ),
+                  )
+                else ...[
+                  _FeedbackButton(
+                    icon: Icons.thumb_up_alt_outlined,
+                    active: feedback == 'like',
+                    onTap: () =>
+                        _setFeedback(feedback == 'like' ? null : 'like'),
                   ),
-                )
-              else ...[
-                _FeedbackButton(
-                  icon: Icons.thumb_up_alt_outlined,
-                  active: feedback == 'like',
-                  onTap: () =>
-                      _setFeedback(feedback == 'like' ? null : 'like'),
-                ),
-                _FeedbackButton(
-                  icon: Icons.thumb_down_alt_outlined,
-                  active: feedback == 'dislike',
-                  onTap: () => _setFeedback(
-                      feedback == 'dislike' ? null : 'dislike'),
-                ),
+                  _FeedbackButton(
+                    icon: Icons.thumb_down_alt_outlined,
+                    active: feedback == 'dislike',
+                    onTap: () => _setFeedback(
+                        feedback == 'dislike' ? null : 'dislike'),
+                  ),
+                ],
               ],
-            ],
-          ),
+            ),
         ],
       ),
     );
