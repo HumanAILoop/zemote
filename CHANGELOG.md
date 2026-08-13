@@ -2,6 +2,12 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [Unreleased]
+
+### Fixed
+- 会话首次订阅（冷启动运行预热）放宽至 60s，避免打开聊天/恢复时超时误判「连不上」。
+- relay 心跳超时触发重连时正确触发 bridge 恢复（此前跳过 `reconnecting` 状态导致配对后 bridge 不恢复）。
+
 ## [0.3.4] - 2026-08-07
 
 ### Fixed

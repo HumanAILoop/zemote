@@ -795,6 +795,10 @@ abstract class _SubscriptionBase<T extends ChangeNotifier> {
       ConversationTransport.channel,
       _subscribeMethod,
       [{..._transport.scope, ..._subscribeArgs}],
+      // The desktop may need to warm the session runtime before answering —
+      // give the subscribe call generous room instead of timing out at the
+      // 30s channel default.
+      timeout: const Duration(seconds: 60),
     );
     final ack = (res as Map?)?['ack'] as Map?;
     _subscriptionId = ack?['subscriptionId'] as String?;

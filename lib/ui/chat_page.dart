@@ -125,7 +125,7 @@ class _ChatPageState extends State<ChatPage> {
     try {
       final sub = await _transport
           .subscribe(sessionId)
-          .timeout(const Duration(seconds: 25));
+          .timeout(const Duration(seconds: 60));
       if (!mounted) {
         await sub.dispose();
         return;
@@ -859,14 +859,27 @@ class _ReconnectBanner extends StatelessWidget {
   }
 }
 
-/// Splits an assistant-turn group into ordered text segments (consecutive
-/// assistantText rows merged) plus the non-text rows, PRESERVING the original
-/// order (reasoning/tool rows stay where they occurred). Feedback buttons are
-/// rendered once, on the last text segment.
-({List<Map<String, dynamic>> segments, List<Map<String, dynamic>> tiles, Map<String, dynamic>? header, bool streaming})
-    assistantTurnParts(List<Map<String, dynamic>> rows) {
-  final segments = <Map<String, dynamic>>[];
-  final tiles = <Map<String, dynamic>>[];
+/// One ordered piece of an assistant turn: either a merged text segment
+/// (kind == 'text') or a non-text row (kind == 'row').
+typedef AssistantPart = ({
+  String kind,
+  String? text,
+  Map<String, dynamic>? row,
+  bool streaming,
+});
+
+/// Splits an assistant-turn group into ORDERED parts — consecutive
+/// assistantText rows merge into one text segment, while reasoning/tool/
+/// subagent rows stay exactly where they occurred in the stream (so
+/// "thinking → tool → answer" never renders as "answer → thinking").
+typedef AssistantTurnParts = ({
+  List<AssistantPart> parts,
+  Map<String, dynamic>? header,
+  bool streaming,
+});
+
+AssistantTurnParts assistantTurnParts(List<Map<String, dynamic>> rows) {
+  final parts = <AssistantPart>[];
   Map<String, dynamic>? header;
   StringBuffer? buf;
   Map<String, dynamic>? template;
@@ -877,11 +890,8 @@ class _ReconnectBanner extends StatelessWidget {
     if (template != null) {
       final text = buf!.toString().trim();
       if (text.isNotEmpty) {
-        segments.add({
-          ...template!,
-          'text': text,
-          if (anyStream) 'state': 'streaming',
-        });
+        parts.add((kind: 'text', text: text, row: template,
+            streaming: anyStream));
       }
       buf = null;
       template = null;
@@ -905,16 +915,11 @@ class _ReconnectBanner extends StatelessWidget {
       header = row;
     } else {
       flushText();
-      tiles.add(row);
+      parts.add((kind: 'row', text: null, row: row, streaming: false));
     }
   }
   flushText();
-  return (
-    segments: segments,
-    tiles: tiles,
-    header: header,
-    streaming: sawStreaming,
-  );
+  return (parts: parts, header: header, streaming: sawStreaming);
 }
 
 /// Groups rows into turns (mirrors the web timeline): a user message starts
@@ -995,30 +1000,40 @@ class _TurnGroupWidget extends StatelessWidget {
         ],
       );
     }
-    // assistant turn: preserve the original order (reasoning → text → tool
-    // → text …). Consecutive assistantText rows merge into one segment, and
-    // the feedback buttons appear only on the LAST text segment.
+    // assistant turn: render parts in original order (reasoning → text →
+    // tool → text …); feedback buttons appear only on the LAST text segment.
     final parts = assistantTurnParts(rows);
-    final children = <Widget>[];
-    for (var i = 0; i < parts.segments.length; i++) {
-      children.add(_RowWidget(
-        row: parts.segments[i],
-        showFeedback: i == parts.segments.length - 1,
-        transport: transport,
-        sessionId: sessionId,
-        onAction: onAction,
-        state: state,
-      ));
+    var lastTextIdx = -1;
+    for (var i = 0; i < parts.parts.length; i++) {
+      if (parts.parts[i].kind == 'text') lastTextIdx = i;
     }
-    for (final row in parts.tiles) {
-      children.add(_RowWidget(
-        row: row,
-        showFeedback: false,
-        transport: transport,
-        sessionId: sessionId,
-        onAction: onAction,
-        state: state,
-      ));
+    final children = <Widget>[];
+    for (var i = 0; i < parts.parts.length; i++) {
+      final p = parts.parts[i];
+      if (p.kind == 'text') {
+        children.add(_RowWidget(
+          row: {
+            ...?p.row,
+            'kind': 'assistantText',
+            'text': p.text,
+            if (p.streaming) 'state': 'streaming',
+          },
+          showFeedback: i == lastTextIdx,
+          transport: transport,
+          sessionId: sessionId,
+          onAction: onAction,
+          state: state,
+        ));
+      } else {
+        children.add(_RowWidget(
+          row: p.row!,
+          showFeedback: false,
+          transport: transport,
+          sessionId: sessionId,
+          onAction: onAction,
+          state: state,
+        ));
+      }
     }
     final header = parts.header;
     if (header != null) children.add(_TurnHeader(row: header));

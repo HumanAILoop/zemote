@@ -4,7 +4,7 @@ import 'package:zemote/ui/chat_page.dart';
 
 void main() {
   group('assistantTurnParts', () {
-    test('preserves order and merges consecutive text only', () {
+    test('preserves original order: reasoning → text → tool → text', () {
       final parts = assistantTurnParts([
         {'kind': 'reasoning', 'text': '思考…'},
         {
@@ -15,23 +15,19 @@ void main() {
           'feedback': 'like',
         },
         {'kind': 'toolCall', 'toolName': 'bash'},
-        {
-          'kind': 'assistantText',
-          'text': 'Done.',
-          'rowId': 2,
-          'entityId': 'e2',
-        },
+        {'kind': 'assistantText', 'text': 'Done.', 'rowId': 2},
         {'kind': 'assistantText', 'text': ' Final words.', 'rowId': 3},
         {'kind': 'subagent', 'text': '…'},
         {'kind': 'turnHeader', 'status': 'completed'},
       ]);
-      // reasoning/tool/subagent keep their original order in tiles
-      expect(parts.tiles.map((t) => t['kind']),
-          ['reasoning', 'toolCall', 'subagent']);
-      // consecutive assistantText after the tool merge into ONE segment
-      expect(parts.segments, hasLength(2));
-      expect(parts.segments[0]['text'], 'Let me check.');
-      expect(parts.segments[1]['text'], 'Done.\n\n Final words.');
+      // Ordered parts: reasoning(tile) → text → tool(tile) → merged text → subagent(tile)
+      expect(parts.parts.map((p) => p.kind),
+          ['row', 'text', 'row', 'text', 'row']);
+      expect(parts.parts[0].row?['kind'], 'reasoning');
+      expect(parts.parts[1].text, 'Let me check.');
+      expect(parts.parts[2].row?['kind'], 'toolCall');
+      expect(parts.parts[3].text, 'Done.\n\n Final words.');
+      expect(parts.parts[4].row?['kind'], 'subagent');
       expect(parts.header?['status'], 'completed');
       expect(parts.streaming, isFalse);
     });
@@ -40,10 +36,11 @@ void main() {
       final parts = assistantTurnParts([
         {'kind': 'assistantText', 'text': '正在输出…', 'state': 'streaming'},
       ]);
-      expect(parts.segments, hasLength(1));
-      expect(parts.segments[0]['text'], '正在输出…');
+      expect(parts.parts, hasLength(1));
+      expect(parts.parts[0].kind, 'text');
+      expect(parts.parts[0].text, '正在输出…');
+      expect(parts.parts[0].streaming, isTrue);
       expect(parts.streaming, isTrue);
-      expect(parts.tiles, isEmpty);
     });
 
     test('empty text rows are dropped', () {
@@ -51,16 +48,16 @@ void main() {
         {'kind': 'assistantText', 'text': '   '},
         {'kind': 'assistantText', 'text': 'real answer'},
       ]);
-      expect(parts.segments, hasLength(1));
-      expect(parts.segments[0]['text'], 'real answer');
+      expect(parts.parts, hasLength(1));
+      expect(parts.parts[0].text, 'real answer');
     });
 
-    test('no assistant text returns empty segments but keeps tiles', () {
+    test('no assistant text keeps tiles only', () {
       final parts = assistantTurnParts([
         {'kind': 'toolCall', 'toolName': 'bash'},
       ]);
-      expect(parts.segments, isEmpty);
-      expect(parts.tiles, hasLength(1));
+      expect(parts.parts, hasLength(1));
+      expect(parts.parts[0].kind, 'row');
     });
   });
 }
