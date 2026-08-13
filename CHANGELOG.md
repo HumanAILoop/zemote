@@ -2,7 +2,7 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
-## [Unreleased]
+## [0.3.4] - 2026-08-07
 
 ### Fixed
 - **气泡内容顺序错误**：思考过程/工具调用与总结顺序被颠倒。已改为保留原始顺序（思考 → 文本 → 工具 → 文本…），连续文本合并，点赞区只在回复最后一个文本段显示一次。
