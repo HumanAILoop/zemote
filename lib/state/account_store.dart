@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../protocol/connection_params.dart';
 import '../protocol/id.dart';
+import 'credential_cipher.dart';
 
 class Account {
   final String id;
@@ -72,8 +73,21 @@ class AccountStore extends ChangeNotifier {
         if (list is List) {
           for (final item in list) {
             if (item is Map) {
-              final account =
-                  Account.fromJson(item.cast<String, dynamic>());
+              final map = item.cast<String, dynamic>();
+              // Decrypt stored credentials (Android Keystore); plaintext
+              // values (legacy) are used as-is and re-encrypted on next save.
+              final storedUrl = '${map['url'] ?? ''}';
+              final decrypted = CredentialCipher.isEncrypted(storedUrl)
+                  ? await CredentialCipher.decrypt(storedUrl)
+                  : null;
+              if (CredentialCipher.isEncrypted(storedUrl) &&
+                  decrypted == null) {
+                // Key lost (reinstall) or unsupported platform — keep the
+                // entry but it can't connect until re-imported.
+                continue;
+              }
+              map['url'] = decrypted ?? storedUrl;
+              final account = Account.fromJson(map);
               if (account.url.isNotEmpty) _accounts.add(account);
             }
           }
@@ -86,10 +100,16 @@ class AccountStore extends ChangeNotifier {
 
   Future<void> _save() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      _prefsKey,
-      jsonEncode(_accounts.map((a) => a.toJson()).toList()),
-    );
+    final out = <Map<String, dynamic>>[];
+    for (final a in _accounts) {
+      final json = a.toJson();
+      // Encrypt the connection URL (contains device credentials) before
+      // persisting; non-Android platforms keep plaintext.
+      json['url'] =
+          await CredentialCipher.encrypt(a.url) ?? a.url;
+      out.add(json);
+    }
+    await prefs.setString(_prefsKey, jsonEncode(out));
   }
 
   Future<Account> addUrl(String url, {String? label}) async {
