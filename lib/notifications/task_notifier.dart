@@ -18,6 +18,7 @@ class TaskNotifier {
 
   SessionsIndexSubscription? _sub;
   Map<String, String> _prevPhases = {};
+  final Set<String> _notifiedInteractions = {};
   bool _active = false;
   bool _disposed = false;
   bool _permissionChecked = false;
@@ -61,6 +62,7 @@ class TaskNotifier {
     final update = computeNotifyUpdate(
       sessions: sub.state.list,
       previousPhases: _prevPhases,
+      notifiedInteractionIds: _notifiedInteractions,
     );
     _prevPhases = {for (final e in sub.state.list) e.sessionId: e.phase};
 
@@ -69,6 +71,15 @@ class TaskNotifier {
         title: '任务完成',
         text: c.preview.trim().isEmpty ? c.title : '${c.title}\n${c.preview}',
         payload: {'taskId': c.taskId, 'title': c.title},
+      ));
+    }
+
+    for (final a in update.needsAttention) {
+      _notifiedInteractions.add(a.interactionId);
+      _safe(notifications.notifyTaskCompleted(
+        title: '需要你的处理',
+        text: a.title,
+        payload: {'taskId': a.taskId, 'title': a.title},
       ));
     }
 

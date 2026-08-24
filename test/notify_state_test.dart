@@ -90,4 +90,46 @@ void main() {
     expect(text, contains('正在应用 diff'));
     expect(text, contains('• 写测试'));
   });
+
+  test('pending interaction fires attention once per interactionId', () {
+    SessionEntry withInteraction() => SessionEntry({
+      'sessionId': 'a',
+      'title': 'Task A',
+      'phase': 'running',
+      'pendingInteraction': {'interactionId': 'i-1', 'kind': 'permission'},
+      'lastActivityAt': 0,
+      'createdAt': 0,
+    });
+
+    final first = computeNotifyUpdate(
+      sessions: [withInteraction()],
+      previousPhases: const {},
+      notifiedInteractionIds: const {},
+    );
+    expect(first.needsAttention, hasLength(1));
+    expect(first.needsAttention[0].interactionId, 'i-1');
+
+    final second = computeNotifyUpdate(
+      sessions: [withInteraction()],
+      previousPhases: const {},
+      notifiedInteractionIds: {'i-1'},
+    );
+    expect(second.needsAttention, isEmpty);
+  });
+
+  test('no pending interaction -> no attention events', () {
+    final update = computeNotifyUpdate(
+      sessions: [
+        SessionEntry({
+          'sessionId': 'a',
+          'title': 'Task',
+          'phase': 'running',
+          'lastActivityAt': 0,
+          'createdAt': 0,
+        }),
+      ],
+      previousPhases: const {},
+    );
+    expect(update.needsAttention, isEmpty);
+  });
 }

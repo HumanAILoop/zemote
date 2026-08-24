@@ -9,8 +9,13 @@ import '../protocol/conversation.dart';
 class NotifyUpdate {
   final List<RunningTask> running;
   final List<CompletionEvent> completed;
+  final List<AttentionEvent> needsAttention;
 
-  const NotifyUpdate({required this.running, required this.completed});
+  const NotifyUpdate({
+    required this.running,
+    required this.completed,
+    this.needsAttention = const [],
+  });
 
   bool get hasRunning => running.isNotEmpty;
 }
@@ -39,6 +44,20 @@ class CompletionEvent {
   });
 }
 
+/// A task that has a pending interaction (permission / input request) and
+/// needs the user's attention.
+class AttentionEvent {
+  final String taskId;
+  final String title;
+  final String interactionId;
+
+  const AttentionEvent({
+    required this.taskId,
+    required this.title,
+    required this.interactionId,
+  });
+}
+
 const _runningPhases = {'running', 'prewarming'};
 const _terminalPhases = {
   'completed',
@@ -52,9 +71,11 @@ const _terminalPhases = {
 NotifyUpdate computeNotifyUpdate({
   required List<SessionEntry> sessions,
   required Map<String, String> previousPhases,
+  Set<String>? notifiedInteractionIds,
 }) {
   final running = <RunningTask>[];
   final completed = <CompletionEvent>[];
+  final needsAttention = <AttentionEvent>[];
   final nowPhases = <String, String>{};
   final nowEntries = <String, SessionEntry>{};
 
@@ -67,6 +88,20 @@ NotifyUpdate computeNotifyUpdate({
         title: e.title.isEmpty ? e.sessionId : e.title,
         preview: e.lastAssistantPreview ?? '',
       ));
+    }
+    // Pending interaction (permission / input) — notify once per
+    // interactionId.
+    final interaction = e.pendingInteraction;
+    if (interaction != null) {
+      final interactionId = '${interaction['interactionId'] ?? ''}';
+      if (interactionId.isNotEmpty &&
+          !(notifiedInteractionIds?.contains(interactionId) ?? false)) {
+        needsAttention.add(AttentionEvent(
+          taskId: e.sessionId,
+          title: e.title.isEmpty ? e.sessionId : e.title,
+          interactionId: interactionId,
+        ));
+      }
     }
   }
 
@@ -82,7 +117,11 @@ NotifyUpdate computeNotifyUpdate({
     ));
   });
 
-  return NotifyUpdate(running: running, completed: completed);
+  return NotifyUpdate(
+    running: running,
+    completed: completed,
+    needsAttention: needsAttention,
+  );
 }
 
 /// Formats the running-tasks list into the persistent notification text.
