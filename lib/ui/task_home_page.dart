@@ -6,6 +6,7 @@ import '../protocol/channel_client.dart';
 import '../protocol/conversation.dart';
 import '../protocol/zemote_client.dart';
 import '../state/log_store.dart';
+import 'automations_page.dart';
 import 'channel_explorer_page.dart';
 import 'chat_page.dart';
 import 'log_page.dart';
@@ -649,6 +650,19 @@ class _TaskHomePageState extends State<TaskHomePage>
                 icon: const Icon(Icons.add_comment_outlined),
                 tooltip: '新建任务',
                 onPressed: _newChat,
+              ),
+              IconButton(
+                icon: const Icon(Icons.schedule_outlined),
+                tooltip: '定时任务',
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => AutomationsPage(
+                      session: widget.session,
+                      scope: _scope,
+                      workspaceKey: _workspaceKey,
+                    ),
+                  ),
+                ),
               ),
               IconButton(
                   icon: const Icon(Icons.refresh), onPressed: _load),
