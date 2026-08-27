@@ -72,6 +72,20 @@ jobs:
         shell: pwsh
         run: .github/scripts/release-notes.ps1
 
+      - name: Remove obsolete release assets
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          release_id=$(gh api "repos/${GITHUB_REPOSITORY}/releases/tags/${GITHUB_REF_NAME}" --jq .id 2>/dev/null || true)
+          if [ -n "$release_id" ]; then
+            gh api "repos/${GITHUB_REPOSITORY}/releases/${release_id}/assets" \
+              --jq '.[] | select(.name == "app-release.apk" or .name == "app-release.apk.sha256") | .id' |
+            while read -r asset_id; do
+              [ -n "$asset_id" ] && gh api --method DELETE "repos/${GITHUB_REPOSITORY}/releases/assets/${asset_id}"
+            done
+          fi
+
       - name: Upload APK to GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
