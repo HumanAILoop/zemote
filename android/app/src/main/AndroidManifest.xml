@@ -55,6 +55,13 @@
             android:name=".ZemoteNotificationService"
             android:exported="false"
             android:foregroundServiceType="dataSync"/>
+        <receiver
+            android:name=".UpdateCleanupReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+            </intent-filter>
+        </receiver>
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

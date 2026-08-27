@@ -46,13 +46,20 @@ class _UpdateDialogState extends State<_UpdateDialog> {
       _openRelease();
       return;
     }
-    final apkUrl = widget.info.apkUrl;
-    if (apkUrl == null) {
+    final supportedAbis =
+        await apkChannel.invokeMethod<List<dynamic>>('getSupportedAbis') ??
+            const [];
+    final asset = selectUpdateAsset(
+      widget.info.assets,
+      supportedAbis.map((abi) => '$abi').toList(),
+    );
+    if (asset == null) {
+      if (mounted) setState(() => _error = '没有适配当前 CPU 的安装包');
       _openRelease();
       return;
     }
-    if (widget.info.checksumUrl == null) {
-      if (mounted) setState(() => _error = '该发布缺少 SHA-256 校验值，请手动下载安装');
+    if (asset.md5Url == null) {
+      if (mounted) setState(() => _error = '该安装包缺少 MD5 校验值，请手动下载安装');
       _openRelease();
       return;
     }
@@ -69,29 +76,38 @@ class _UpdateDialogState extends State<_UpdateDialog> {
     });
     try {
       final dir = await apkChannel.invokeMethod<String>('getApkDir');
-      final file = File('$dir/zemote-${widget.info.latestVersion}.apk');
-      await _download(apkUrl, file.path, (p) {
-        if (mounted) setState(() => _progress = p);
-      });
-      if (!mounted) return;
       final checksumResponse = await http
-          .get(Uri.parse(widget.info.checksumUrl!))
+          .get(Uri.parse(asset.md5Url!))
           .timeout(const Duration(seconds: 15));
       if (checksumResponse.statusCode != 200) {
         throw HttpException('校验文件 HTTP ${checksumResponse.statusCode}');
       }
-      final expected = parseChecksumHex(checksumResponse.body);
-      final actual = (await sha256.bind(file.openRead()).first).toString();
-      if (expected == null || expected != actual) {
-        file.deleteSync();
-        setState(() {
-          _phase = _Phase.prompt;
-          _error = 'SHA-256 校验失败，已取消安装';
+      final expected = parseMd5Hex(checksumResponse.body);
+      if (expected == null) throw const FormatException('MD5 校验文件无效');
+      final file =
+          File('$dir/zemote-${widget.info.latestVersion}-${asset.abi}.apk');
+      var valid = await _matchesMd5(file, expected);
+      if (!valid) {
+        await _download(asset.apkUrl, file.path, (p) {
+          if (mounted) setState(() => _progress = p);
         });
+        valid = await _matchesMd5(file, expected);
+      }
+      if (!valid) {
+        if (await file.exists()) await file.delete();
+        if (mounted) {
+          setState(() {
+            _phase = _Phase.prompt;
+            _error = 'MD5 校验失败，已删除安装包并取消安装';
+          });
+        }
         return;
       }
-      final ok = await apkChannel
-              .invokeMethod<bool>('installApk', {'path': file.path}) ??
+      if (!mounted) return;
+      final ok = await apkChannel.invokeMethod<bool>('installApk', {
+            'path': file.path,
+            'deleteAfterInstall': true,
+          }) ??
           false;
       setState(() {
         _phase = ok ? _Phase.done : _Phase.prompt;
@@ -105,6 +121,12 @@ class _UpdateDialogState extends State<_UpdateDialog> {
         });
       }
     }
+  }
+
+  Future<bool> _matchesMd5(File file, String expected) async {
+    if (!await file.exists()) return false;
+    final actual = (await md5.bind(file.openRead()).first).toString();
+    return actual == expected;
   }
 
   Future<bool?> _askEnableInstall() {
@@ -140,9 +162,16 @@ class _UpdateDialogState extends State<_UpdateDialog> {
     try {
       final target = File(path);
       var start = target.existsSync() ? target.lengthSync() : 0;
-      final request = http.Request('GET', Uri.parse(url));
-      if (start > 0) request.headers['Range'] = 'bytes=$start-';
-      final res = await client.send(request);
+      http.StreamedResponse res;
+      for (var attempt = 0;; attempt++) {
+        final request = http.Request('GET', Uri.parse(url));
+        if (start > 0) request.headers['Range'] = 'bytes=$start-';
+        res = await client.send(request);
+        if (res.statusCode != 416 || start == 0 || attempt > 0) break;
+        await res.stream.drain<void>();
+        await target.delete();
+        start = 0;
+      }
       final resumed = res.statusCode == 206;
       if (res.statusCode != 200 && !resumed) {
         throw HttpException('HTTP ${res.statusCode}');
@@ -154,11 +183,12 @@ class _UpdateDialogState extends State<_UpdateDialog> {
       final total = resumed
           ? int.tryParse(RegExp(r'/([0-9]+)\s*$')
                   .firstMatch(res.headers['content-range'] ?? '')
-                  ?.group(1) ?? '')
+                  ?.group(1) ??
+              '')
           : res.contentLength;
       var received = start;
-      final sink = target.openWrite(
-          mode: resumed ? FileMode.append : FileMode.write);
+      final sink =
+          target.openWrite(mode: resumed ? FileMode.append : FileMode.write);
       try {
         await for (final chunk in res.stream) {
           received += chunk.length;
@@ -177,8 +207,7 @@ class _UpdateDialogState extends State<_UpdateDialog> {
   void _openRelease() {
     Clipboard.setData(ClipboardData(text: widget.info.releaseUrl));
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content:
-            Text('已复制下载链接：${widget.info.releaseUrl}（请打开 GitHub 下载）')));
+        content: Text('已复制下载链接：${widget.info.releaseUrl}（请打开 GitHub 下载）')));
   }
 
   @override
@@ -204,13 +233,12 @@ class _UpdateDialogState extends State<_UpdateDialog> {
                   ),
                 )
               else
-                const Text('有新的 Zemote 版本可用。',
-                    style: TextStyle(fontSize: 13)),
+                const Text('有新的 Zemote 版本可用。', style: TextStyle(fontSize: 13)),
               if (_error != null) ...[
                 const SizedBox(height: 10),
                 Text('$_error',
-                    style: const TextStyle(
-                        fontSize: 12, color: ZColors.danger)),
+                    style:
+                        const TextStyle(fontSize: 12, color: ZColors.danger)),
               ],
             ] else if (_phase == _Phase.downloading) ...[
               Text('正在下载 APK … ${(_progress * 100).toStringAsFixed(0)}%',

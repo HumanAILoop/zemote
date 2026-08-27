@@ -40,6 +40,7 @@ class MainActivity : FlutterActivity() {
         MethodChannel(messenger, channelName).setMethodCallHandler { call, result ->
             when (call.method) {
                 "getApkDir" -> result.success(apkDir().absolutePath)
+                "getSupportedAbis" -> result.success(Build.SUPPORTED_ABIS.toList())
                 "canInstall" -> result.success(canRequestPackageInstalls())
                 "openInstallSettings" -> {
                     openInstallSettings()
@@ -47,7 +48,9 @@ class MainActivity : FlutterActivity() {
                 }
                 "installApk" -> {
                     val path = call.argument<String>("path")
-                    result.success(installApk(path))
+                    val deleteAfterInstall =
+                        call.argument<Boolean>("deleteAfterInstall") == true
+                    result.success(installApk(path, deleteAfterInstall))
                 }
                 else -> result.notImplemented()
             }
@@ -179,8 +182,7 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun apkDir(): File =
-        getExternalFilesDir(null) ?: filesDir
+    private fun apkDir(): File = File(filesDir, "update").apply { mkdirs() }
 
     private fun canRequestPackageInstalls(): Boolean =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -199,7 +201,7 @@ class MainActivity : FlutterActivity() {
         }
     }
 
-    private fun installApk(path: String?): Boolean {
+    private fun installApk(path: String?, deleteAfterInstall: Boolean): Boolean {
         if (path == null) return false
         val file = File(path)
         if (!file.exists()) return false
@@ -214,6 +216,12 @@ class MainActivity : FlutterActivity() {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         return try {
+            if (deleteAfterInstall) {
+                getSharedPreferences("update", MODE_PRIVATE)
+                    .edit()
+                    .putString("cleanupApkPath", file.absolutePath)
+                    .apply()
+            }
             startActivity(intent)
             true
         } catch (e: Exception) {

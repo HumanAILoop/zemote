@@ -26,12 +26,37 @@ void main() {
     });
   });
 
-  test('parseChecksumHex accepts sha256sum output', () {
+  test('parseMd5Hex accepts md5sum output', () {
     expect(
-      parseChecksumHex(
-          'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA  app.apk'),
-      'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      parseMd5Hex('AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA  app.apk'),
+      'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     );
-    expect(parseChecksumHex('not a checksum'), isNull);
+    expect(parseMd5Hex('not a checksum'), isNull);
+  });
+
+  test('selectUpdateAsset follows Android supported ABI order', () {
+    const assets = [
+      UpdateAsset(
+        abi: 'x86_64',
+        fileName: 'zemote-x86_64.apk',
+        apkUrl: 'x86',
+      ),
+      UpdateAsset(
+        abi: 'arm64-v8a',
+        fileName: 'zemote-arm64-v8a.apk',
+        apkUrl: 'arm64',
+      ),
+    ];
+    expect(
+      selectUpdateAsset(assets, ['arm64-v8a', 'armeabi-v7a'])?.apkUrl,
+      'arm64',
+    );
+    expect(selectUpdateAsset(assets, ['armeabi-v7a']), isNull);
+  });
+
+  test('abiFromAssetName recognizes split APK assets', () {
+    expect(abiFromAssetName('zemote-arm64-v8a.apk'), 'arm64-v8a');
+    expect(abiFromAssetName('zemote-armeabi-v7a.apk.md5'), 'armeabi-v7a');
+    expect(abiFromAssetName('zemote-universal.apk'), isNull);
   });
 }

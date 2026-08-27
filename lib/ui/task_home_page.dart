@@ -204,21 +204,25 @@ class _TaskHomePageState extends State<TaskHomePage>
   void _mergeSessions() {
     final sub = _sessionsSub;
     if (sub == null || !mounted) return;
+    if (!sub.state.ready) return;
     final entries = sub.state.list
         .where((e) =>
             !_isRecentlyRemoved(e.sessionId) &&
             !_archivedIds.contains(e.sessionId))
         .toList();
-    if (entries.isEmpty && _tasks.isEmpty) return;
-    setState(() => _tasks = mergeWorkspaceSessionTasks(
-          channelTasks: _tasks.where((task) {
-            if (task is! Map || task['taskId'] == null) return false;
-            return !_isRecentlyRemoved('${task['taskId']}');
-          }).toList(),
-          sessions: entries,
-          archivedIds: _archivedIds,
-          workspace: widget.workspace,
-        ));
+    setState(() {
+      _tasks = mergeWorkspaceSessionTasks(
+        channelTasks: _tasks.where((task) {
+          if (task is! Map || task['taskId'] == null) return false;
+          return !_isRecentlyRemoved('${task['taskId']}');
+        }).toList(),
+        sessions: entries,
+        archivedIds: _archivedIds,
+        workspace: widget.workspace,
+      );
+      _loading = false;
+      _error = null;
+    });
   }
 
   Future<void> _load() async {
@@ -229,13 +233,16 @@ class _TaskHomePageState extends State<TaskHomePage>
     try {
       final results = await Future.wait([
         widget.session.channels
-            .call(Channels.zcodeTask, 'listTasks', [_scope])
+            .call(Channels.zcodeTask, 'listTasks', [_scope],
+                timeout: const Duration(seconds: 12))
             .catchError((Object _) => const []),
         widget.session.channels
-            .call(Channels.zcodeTask, 'listPinnedTasks', [_scope])
+            .call(Channels.zcodeTask, 'listPinnedTasks', [_scope],
+                timeout: const Duration(seconds: 12))
             .catchError((Object _) => const []),
         widget.session.channels
-            .call(Channels.zcodeTask, 'listArchivedTasks', [_scope])
+            .call(Channels.zcodeTask, 'listArchivedTasks', [_scope],
+                timeout: const Duration(seconds: 12))
             .catchError((Object _) => const []),
       ]);
       if (!mounted) return;
@@ -286,15 +293,13 @@ class _TaskHomePageState extends State<TaskHomePage>
 
   void _markRead(Map<String, dynamic> task) {
     final unreadAt = task['unreadAt'];
-    widget.session.channels
-        .call(Channels.zcodeTask, 'setTaskUnread', [
-          {
-            ..._taskScope(task),
-            'unread': false,
-            if (unreadAt is num) 'expectedUnreadAt': unreadAt,
-          },
-        ])
-        .catchError((Object e) => log('[task] markRead failed: $e'));
+    widget.session.channels.call(Channels.zcodeTask, 'setTaskUnread', [
+      {
+        ..._taskScope(task),
+        'unread': false,
+        if (unreadAt is num) 'expectedUnreadAt': unreadAt,
+      },
+    ]).catchError((Object e) => log('[task] markRead failed: $e'));
   }
 
   Future<void> _openTask(Map<String, dynamic> task) async {
@@ -330,10 +335,11 @@ class _TaskHomePageState extends State<TaskHomePage>
     }
   }
 
-  Future<void> _setPinned(Map<String, dynamic> task, bool pinned) =>
-      _action(
-        () => widget.session.channels.call(Channels.zcodeTask,
-            'setTaskPinned', [{..._taskScope(task), 'pinned': pinned}]),
+  Future<void> _setPinned(Map<String, dynamic> task, bool pinned) => _action(
+        () =>
+            widget.session.channels.call(Channels.zcodeTask, 'setTaskPinned', [
+          {..._taskScope(task), 'pinned': pinned}
+        ]),
         pinned ? '置顶失败' : '取消置顶失败',
       );
 
@@ -389,8 +395,7 @@ class _TaskHomePageState extends State<TaskHomePage>
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('取消')),
+              onPressed: () => Navigator.pop(context), child: const Text('取消')),
           FilledButton(
               onPressed: () => Navigator.pop(context, controller.text.trim()),
               child: const Text('保存')),
@@ -400,8 +405,9 @@ class _TaskHomePageState extends State<TaskHomePage>
     controller.dispose();
     if (title == null || title.isEmpty) return;
     await _action(
-      () => widget.session.channels.call(Channels.zcodeTask, 'renameTask',
-          [{..._taskScope(task), 'title': title}]),
+      () => widget.session.channels.call(Channels.zcodeTask, 'renameTask', [
+        {..._taskScope(task), 'title': title}
+      ]),
       '重命名失败',
     );
   }
@@ -451,8 +457,8 @@ class _TaskHomePageState extends State<TaskHomePage>
   }
 
   void _showActions(Map<String, dynamic> task, {required bool archived}) {
-    final pinned = _pinned.any(
-        (t) => t is Map && '${t['taskId']}' == '${task['taskId']}');
+    final pinned =
+        _pinned.any((t) => t is Map && '${t['taskId']}' == '${task['taskId']}');
     showModalBottomSheet(
       context: context,
       builder: (context) => SafeArea(
@@ -461,9 +467,8 @@ class _TaskHomePageState extends State<TaskHomePage>
           children: [
             if (!archived) ...[
               ListTile(
-                leading: Icon(pinned
-                    ? Icons.push_pin
-                    : Icons.push_pin_outlined),
+                leading:
+                    Icon(pinned ? Icons.push_pin : Icons.push_pin_outlined),
                 title: Text(pinned ? '取消置顶' : '置顶'),
                 onTap: () {
                   Navigator.pop(context);
@@ -512,10 +517,8 @@ class _TaskHomePageState extends State<TaskHomePage>
               },
             ),
             ListTile(
-              leading:
-                  const Icon(Icons.delete_outline, color: ZColors.danger),
-              title: const Text('删除',
-                  style: TextStyle(color: ZColors.danger)),
+              leading: const Icon(Icons.delete_outline, color: ZColors.danger),
+              title: const Text('删除', style: TextStyle(color: ZColors.danger)),
               onTap: () {
                 Navigator.pop(context);
                 _delete(task);
@@ -579,9 +582,8 @@ class _TaskHomePageState extends State<TaskHomePage>
               title: const Text('协议日志'),
               onTap: () {
                 Navigator.pop(context);
-                Navigator.of(context).push(
-                    MaterialPageRoute(
-                        builder: (_) => const LogPage()));
+                Navigator.of(context)
+                    .push(MaterialPageRoute(builder: (_) => const LogPage()));
               },
             ),
             ListTile(
@@ -589,10 +591,8 @@ class _TaskHomePageState extends State<TaskHomePage>
               title: const Text('RPC 调试器'),
               onTap: () {
                 Navigator.pop(context);
-                Navigator.of(context).push(
-                    MaterialPageRoute(
-                        builder: (_) =>
-                            RpcExplorerPage(client: widget.client)));
+                Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) => RpcExplorerPage(client: widget.client)));
               },
             ),
             ListTile(
@@ -600,10 +600,9 @@ class _TaskHomePageState extends State<TaskHomePage>
               title: const Text('Channel RPC 调试器'),
               onTap: () {
                 Navigator.pop(context);
-                Navigator.of(context).push(
-                    MaterialPageRoute(
-                        builder: (_) =>
-                            ChannelExplorerPage(session: widget.session)));
+                Navigator.of(context).push(MaterialPageRoute(
+                    builder: (_) =>
+                        ChannelExplorerPage(session: widget.session)));
               },
             ),
           ],
@@ -615,9 +614,7 @@ class _TaskHomePageState extends State<TaskHomePage>
   List<dynamic> _filtered(List<dynamic> tasks) {
     if (_query.isEmpty) return tasks;
     final q = _query.toLowerCase();
-    return tasks
-        .where((t) => _taskTitle(t).toLowerCase().contains(q))
-        .toList();
+    return tasks.where((t) => _taskTitle(t).toLowerCase().contains(q)).toList();
   }
 
   @override
@@ -681,8 +678,7 @@ class _TaskHomePageState extends State<TaskHomePage>
                   ),
                 ),
               ),
-              IconButton(
-                  icon: const Icon(Icons.refresh), onPressed: _load),
+              IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
             ],
           ),
         ),
@@ -713,9 +709,7 @@ class _TaskHomePageState extends State<TaskHomePage>
           controller: _tabController,
           tabs: [
             Tab(text: '${tr(context, 'home.tab.tasks')} ${_tasks.length}'),
-            Tab(
-                text:
-                    '${tr(context, 'home.tab.pinned')} ${_pinned.length}'),
+            Tab(text: '${tr(context, 'home.tab.pinned')} ${_pinned.length}'),
             Tab(
                 text:
                     '${tr(context, 'home.tab.archived')} ${_archived.length}'),
@@ -734,8 +728,7 @@ class _TaskHomePageState extends State<TaskHomePage>
                           emptyText: tr(context, 'home.empty.tasks'),
                           onRefresh: _load,
                           onOpen: _openTask,
-                          onActions: (t) =>
-                              _showActions(t, archived: false),
+                          onActions: (t) => _showActions(t, archived: false),
                           titleOf: _taskTitle,
                           statusOf: _taskStatus,
                           onPin: (t) => _setPinned(t, true),
@@ -746,8 +739,7 @@ class _TaskHomePageState extends State<TaskHomePage>
                           emptyText: tr(context, 'home.empty.pinned'),
                           onRefresh: _load,
                           onOpen: _openTask,
-                          onActions: (t) =>
-                              _showActions(t, archived: false),
+                          onActions: (t) => _showActions(t, archived: false),
                           titleOf: _taskTitle,
                           statusOf: _taskStatus,
                           onPin: (t) => _setPinned(t, false),
@@ -758,8 +750,7 @@ class _TaskHomePageState extends State<TaskHomePage>
                           emptyText: tr(context, 'home.empty.archived'),
                           onRefresh: _load,
                           onOpen: _openTask,
-                          onActions: (t) =>
-                              _showActions(t, archived: true),
+                          onActions: (t) => _showActions(t, archived: true),
                           titleOf: _taskTitle,
                           statusOf: _taskStatus,
                           onPin: _unarchive,
@@ -857,8 +848,8 @@ class _TaskList extends StatelessWidget {
           children: [
             const SizedBox(height: 120),
             Center(
-              child: Text(emptyText,
-                  style: TextStyle(color: ZInk.faint(context))),
+              child:
+                  Text(emptyText, style: TextStyle(color: ZInk.faint(context))),
             ),
           ],
         ),
@@ -892,8 +883,8 @@ class _TaskList extends StatelessWidget {
                     Container(
                       width: 8,
                       height: 8,
-                      decoration: BoxDecoration(
-                          color: color, shape: BoxShape.circle),
+                      decoration:
+                          BoxDecoration(color: color, shape: BoxShape.circle),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -904,9 +895,8 @@ class _TaskList extends StatelessWidget {
                             titleOf(task),
                             style: TextStyle(
                               fontSize: 14,
-                              fontWeight: unread
-                                  ? FontWeight.w600
-                                  : FontWeight.w400,
+                              fontWeight:
+                                  unread ? FontWeight.w600 : FontWeight.w400,
                             ),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
@@ -934,8 +924,7 @@ class _TaskList extends StatelessWidget {
                           Text(
                             [
                               if (status.isNotEmpty) status,
-                              if (task['model'] != null)
-                                '${task['model']}',
+                              if (task['model'] != null) '${task['model']}',
                               relativeTime(
                                   (task['updatedAt'] as num?)?.toInt()),
                             ].where((s) => s.isNotEmpty).join(' · '),
@@ -953,8 +942,7 @@ class _TaskList extends StatelessWidget {
                         width: 8,
                         height: 8,
                         decoration: const BoxDecoration(
-                            color: ZColors.warning,
-                            shape: BoxShape.circle),
+                            color: ZColors.warning, shape: BoxShape.circle),
                       ),
                     // Web/桌面端长按不好触发，提供显式入口
                     IconButton(
@@ -972,8 +960,7 @@ class _TaskList extends StatelessWidget {
 
           if (onPin != null || onArchive != null) {
             tile = Dismissible(
-              key: ValueKey(
-                  '${task['taskId'] ?? 'row-$index'}'),
+              key: ValueKey('${task['taskId'] ?? 'row-$index'}'),
               direction: onArchive != null
                   ? DismissDirection.horizontal
                   : DismissDirection.startToEnd,
@@ -996,8 +983,7 @@ class _TaskList extends StatelessWidget {
                   borderRadius: BorderRadius.circular(14),
                 ),
                 child: startIcon ??
-                    const Icon(Icons.push_pin_outlined,
-                        color: ZColors.primary),
+                    const Icon(Icons.push_pin_outlined, color: ZColors.primary),
               ),
               secondaryBackground: Container(
                 alignment: Alignment.centerRight,
@@ -1006,8 +992,8 @@ class _TaskList extends StatelessWidget {
                   color: ZColors.warning.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: const Icon(Icons.archive_outlined,
-                    color: ZColors.warning),
+                child:
+                    const Icon(Icons.archive_outlined, color: ZColors.warning),
               ),
               child: tile,
             );

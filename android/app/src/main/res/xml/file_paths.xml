@@ -1,8 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
-    <!-- App-specific external files dir (getExternalFilesDir) — the APK
-         is downloaded here (see MainActivity.kt apkDir()). -->
-    <external-files-path name="apk" path="."/>
-    <!-- Fallback internal files dir. -->
-    <files-path name="internal" path="."/>
+    <files-path name="update" path="update/"/>
 </paths>

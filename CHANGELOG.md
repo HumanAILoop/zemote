@@ -2,6 +2,21 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [0.4.2] - 2026-08-27
+
+### Added
+- Android 更新按 CPU 架构自动选择安装包，发布产物拆分为 `arm64-v8a`、`armeabi-v7a` 和 `x86_64`。
+- 每个 APK 发布独立 `.md5` 校验文件，应用安装前执行 MD5 完整性验证。
+- 下载支持断点续传；本地已存在且 MD5 正确的安装包会跳过下载并直接打开安装器。
+- 应用升级完成后通过 `MY_PACKAGE_REPLACED` 自动删除已使用的 APK 和更新缓存。
+
+### Fixed
+- sessions-index 快照到达后立即结束会话列表加载，不再被旧任务 RPC 的超时骨架屏遮住；空列表也能正常结束加载。
+
+### Changed
+- 更新 APK 改为存放在应用内部 `files/update` 目录，FileProvider 仅暴露该目录。
+- Release 现在上传 3 个 ABI APK 及对应的 3 个 MD5 文件。
+
 ## [0.4.1] - 2026-08-27
 
 ### Added

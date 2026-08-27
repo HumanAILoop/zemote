@@ -5,27 +5,39 @@ import 'package:http/http.dart' as http;
 import 'app_version.dart';
 
 /// Result of an update check against the GitHub latest release.
+class UpdateAsset {
+  final String abi;
+  final String fileName;
+  final String apkUrl;
+  final String? md5Url;
+
+  const UpdateAsset({
+    required this.abi,
+    required this.fileName,
+    required this.apkUrl,
+    this.md5Url,
+  });
+}
+
 class UpdateInfo {
   final String latestVersion;
   final String releaseUrl;
   final String? body;
-  final String? apkUrl;
-  final String? checksumUrl;
+  final List<UpdateAsset> assets;
   final bool isNewer;
 
   const UpdateInfo({
     required this.latestVersion,
     required this.releaseUrl,
     this.body,
-    this.apkUrl,
-    this.checksumUrl,
+    this.assets = const [],
     required this.isNewer,
   });
 }
 
 /// Queries `https://api.github.com/repos/HumanAILoop/zemote/releases/latest`
 /// and compares the release tag with [currentVersion]. The release tag is
-/// `vX.Y.Z`; the CI (`build-apk.yml`) uploads `app-release.apk` as an asset.
+/// `vX.Y.Z`; the CI uploads one APK and MD5 file per Android ABI.
 Future<UpdateInfo> checkForUpdates({
   String currentVersion = appVersion,
 }) async {
@@ -43,37 +55,68 @@ Future<UpdateInfo> checkForUpdates({
   }
   final tag = '${data['tag_name'] ?? ''}';
   final version = tag.startsWith('v') ? tag.substring(1) : tag;
-  final releaseUrl = '${data['html_url'] ?? 'https://github.com/HumanAILoop/zemote/releases'}';
+  final releaseUrl =
+      '${data['html_url'] ?? 'https://github.com/HumanAILoop/zemote/releases'}';
   final body = data['body'] as String?;
   final assets = data['assets'];
-  String? apkUrl;
-  String? checksumUrl;
+  final apkUrls = <String, String>{};
+  final apkNames = <String, String>{};
+  final md5Urls = <String, String>{};
   if (assets is List) {
     for (final a in assets.whereType<Map>()) {
-      if ('${a['name'] ?? ''}'.endsWith('.apk')) {
-        final url = '${a['browser_download_url'] ?? ''}';
-        if (url.isNotEmpty) {
-          apkUrl = url;
-        }
-      } else if ('${a['name'] ?? ''}'.endsWith('.sha256')) {
-        final url = '${a['browser_download_url'] ?? ''}';
-        if (url.isNotEmpty) checksumUrl = url;
+      final name = '${a['name'] ?? ''}';
+      final url = '${a['browser_download_url'] ?? ''}';
+      if (url.isEmpty) continue;
+      final abi = abiFromAssetName(name);
+      if (abi == null) continue;
+      if (name.endsWith('.apk')) {
+        apkUrls[abi] = url;
+        apkNames[abi] = name;
+      } else if (name.endsWith('.apk.md5')) {
+        md5Urls[abi] = url;
       }
     }
   }
+  final updateAssets = <UpdateAsset>[
+    for (final abi in apkUrls.keys)
+      UpdateAsset(
+        abi: abi,
+        fileName: apkNames[abi]!,
+        apkUrl: apkUrls[abi]!,
+        md5Url: md5Urls[abi],
+      ),
+  ];
   return UpdateInfo(
     latestVersion: version.isEmpty ? tag : version,
     releaseUrl: releaseUrl,
     body: body,
-    apkUrl: apkUrl,
-    checksumUrl: checksumUrl,
-    isNewer: version.isNotEmpty &&
-        compareVersions(version, currentVersion) > 0,
+    assets: updateAssets,
+    isNewer: version.isNotEmpty && compareVersions(version, currentVersion) > 0,
   );
 }
 
-String? parseChecksumHex(String content) {
-  return RegExp(r'\b[0-9a-fA-F]{64}\b').firstMatch(content)?.group(0)?.toLowerCase();
+String? abiFromAssetName(String name) {
+  for (final abi in const ['arm64-v8a', 'armeabi-v7a', 'x86_64']) {
+    if (name.contains(abi)) return abi;
+  }
+  return null;
+}
+
+UpdateAsset? selectUpdateAsset(
+    List<UpdateAsset> assets, List<String> supportedAbis) {
+  for (final abi in supportedAbis) {
+    for (final asset in assets) {
+      if (asset.abi == abi) return asset;
+    }
+  }
+  return null;
+}
+
+String? parseMd5Hex(String content) {
+  return RegExp(r'\b[0-9a-fA-F]{32}\b')
+      .firstMatch(content)
+      ?.group(0)
+      ?.toLowerCase();
 }
 
 class UpdateCheckException implements Exception {

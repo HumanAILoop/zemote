@@ -113,14 +113,14 @@ flutter run -d windows
 ### 构建 APK
 
 ```bash
-flutter build apk
-# 产物：build/app/outputs/flutter-apk/app-release.apk
+flutter build apk --split-per-abi
+# 产物：arm64-v8a / armeabi-v7a / x86_64 三种 APK
 ```
 
 ## 更新与签名
 
-- 应用内置**更新检测**：启动时与 GitHub 最新 Release 比对版本号，发现新版本弹窗提示；Android 端可直接下载 APK 并调用系统安装器升级。
-- 发布流程：在 `main` 上打好代码 → 提交 → `git tag vX.Y.Z` → 推送。GitHub Actions 自动执行 `flutter analyze` + `flutter test` + 构建并上传 **统一签名** 的 release APK 到 GitHub Release。
+- 应用内置**更新检测**：按设备 CPU 自动选择 APK，支持断点续传、缓存安装包直装、MD5 校验和安装完成后自动清理。
+- 发布流程：在 `main` 上打好代码 → 提交 → `git tag vX.Y.Z` → 推送。GitHub Actions 自动执行 `flutter analyze` + `flutter test`，并构建上传三种 CPU 架构的统一签名 APK 与对应 MD5。
 - 签名说明：release APK 使用正式 keystore 签名（本地 `android/key.properties` + CI Secrets），保证覆盖安装与持续更新可用。详见 `.github/workflows/build-apk.yml`。
 
 ## 架构
