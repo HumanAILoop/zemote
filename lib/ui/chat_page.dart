@@ -42,6 +42,27 @@ class _PendingFile {
   _PendingFile(this.fileName, this.mime, this.bytes);
 }
 
+/// Removes only the number of confirmed echoes matching each user message.
+/// Failed echoes remain visible so the user can retry them.
+List<Map<String, dynamic>> removeEchoedTexts(
+    List<Map<String, dynamic>> echoes, List<Map<String, dynamic>> rows) {
+  final confirmed = <String, int>{};
+  for (final row in rows) {
+    if (row['kind'] != 'userInput') continue;
+    final text = '${row['text'] ?? ''}'.trim();
+    confirmed[text] = (confirmed[text] ?? 0) + 1;
+  }
+  final remaining = <String, int>{...confirmed};
+  return echoes.where((echo) {
+    if (echo['status'] == 'failed') return true;
+    final text = '${echo['text'] ?? ''}'.trim();
+    final count = remaining[text] ?? 0;
+    if (count == 0) return true;
+    remaining[text] = count - 1;
+    return false;
+  }).toList();
+}
+
 class _ChatPageState extends State<ChatPage> {
   late final ConversationTransport _transport;
   ConversationSubscription? _subscription;
@@ -50,6 +71,20 @@ class _ChatPageState extends State<ChatPage> {
   String? _sessionId;
   String? _error;
   bool _sending = false;
+  final List<Map<String, dynamic>> _echoes = [];
+
+  void _dedupeEchoes() {
+    final state = _state;
+    if (state == null || _echoes.isEmpty) return;
+    final kept = removeEchoedTexts(_echoes, state.rows);
+    if (kept.length != _echoes.length && mounted) {
+      setState(() {
+        _echoes
+          ..clear()
+          ..addAll(kept);
+      });
+    }
+  }
   bool _loadingOlder = false;
   bool _showSlash = false;
   String? _progress;
@@ -135,15 +170,17 @@ class _ChatPageState extends State<ChatPage> {
         _error = null;
       });
       sub.state.addListener(_scrollToBottom);
+      sub.state.addListener(_dedupeEchoes);
       // The server snapshot is a tail window (can be as few as 3 rows).
       // The official client shows the full history immediately, so
       // auto-load the missing older rows once on open.
       if (sub.state.canLoadOlder) {
         await _loadOlder();
       }
-      // Explicitly position at the newest message: the state listener only
-      // fires on LATER updates and misses the initial snapshot.
-      _scrollToBottom();
+      // Initial snapshots and auto-loaded history can change the list height
+      // over multiple frames. Force the first open to the newest message;
+      // later streaming updates still use the conditional follow behavior.
+      _jumpToLatest();
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
     }
@@ -164,6 +201,21 @@ class _ChatPageState extends State<ChatPage> {
         );
       }
     });
+  }
+
+  void _jumpToLatest() {
+    _stickToBottom = true;
+    void jump() {
+      if (!mounted || !_stickToBottom || !_scrollController.hasClients) return;
+      _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+    }
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      jump();
+      WidgetsBinding.instance.addPostFrameCallback((_) => jump());
+    });
+    Future<void>.delayed(const Duration(milliseconds: 100), jump);
+    Future<void>.delayed(const Duration(milliseconds: 300), jump);
   }
 
   void _toast(String message) {
@@ -246,19 +298,22 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
-  Future<List<Map<String, dynamic>>> _uploadPending(String sessionId) async {
+  Future<List<Map<String, dynamic>>> _uploadFiles(
+      List<_PendingFile> files, String sessionId) async {
     final uploaded = <Map<String, dynamic>>[];
-    for (var i = 0; i < _pendingFiles.length; i++) {
-      final file = _pendingFiles[i];
-      final descriptor = await _transport.attachmentPut(
+    for (var i = 0; i < files.length; i++) {
+      final file = files[i];
+      uploaded.add(await _transport.attachmentPut(
         sessionId,
         fileName: file.fileName,
         mime: file.mime,
         bytes: file.bytes,
-        onProgress: (p) => setState(() =>
-            _uploadProgress = (i + p) / _pendingFiles.length),
-      );
-      uploaded.add(descriptor);
+        onProgress: (progress) {
+          if (mounted) {
+            setState(() => _uploadProgress = (i + progress) / files.length);
+          }
+        },
+      ));
     }
     return uploaded;
   }
@@ -300,7 +355,16 @@ class _ChatPageState extends State<ChatPage> {
       if (heldDisposition == null) return; // cancelled
     }
 
+    final echo = <String, dynamic>{
+      'text': text,
+      'isGoal': text.startsWith('/goal '),
+      'status': 'sending',
+      'ts': DateTime.now().millisecondsSinceEpoch,
+      'files': List<_PendingFile>.from(_pendingFiles),
+      'attachments': null,
+    };
     setState(() {
+      _echoes.add(echo);
       _sending = true;
       _uploadProgress = null;
       _showSlash = false;
@@ -315,8 +379,9 @@ class _ChatPageState extends State<ChatPage> {
         // Plain text first message is sent WITH createSession (firstInput,
         // mirrors the official composer). This avoids a send-before-subscribe
         // race where the first command can be dropped on a fresh session.
+        final echoFiles = echo['files'] as List<_PendingFile>;
         final canUseFirstInput = text.isNotEmpty &&
-            _pendingFiles.isEmpty &&
+            echoFiles.isEmpty &&
             !text.startsWith('/goal ') &&
             heldDisposition == null;
         try {
@@ -338,6 +403,7 @@ class _ChatPageState extends State<ChatPage> {
         setState(() => _progress = null);
         if (canUseFirstInput) {
           // Message already sent with the session; just display history.
+          echo['status'] = 'sent';
           _inputController.clear();
           setState(() => _pendingFiles.clear());
           _subscribe();
@@ -354,16 +420,21 @@ class _ChatPageState extends State<ChatPage> {
           heldQueueDisposition: heldDisposition,
         );
         if (_ackRejected(res)) {
+          echo['status'] = 'failed';
+          echo['error'] = _ackReason(res);
           _toast('发送失败: ${_ackReason(res)}');
           return;
         }
+        echo['status'] = 'sent';
         _inputController.clear();
         return;
       }
       List<Map<String, dynamic>>? attachments;
-      if (_pendingFiles.isNotEmpty) {
+      final echoFiles = echo['files'] as List<_PendingFile>;
+      if (echoFiles.isNotEmpty) {
         setState(() => _progress = '正在上传附件…');
-        attachments = await _uploadPending(sessionId);
+        attachments = await _uploadFiles(echoFiles, sessionId);
+        echo['attachments'] = attachments;
         setState(() => _progress = null);
       }
       final res = await _transport.sendText(
@@ -373,12 +444,17 @@ class _ChatPageState extends State<ChatPage> {
         heldQueueDisposition: heldDisposition,
       );
       if (_ackRejected(res)) {
+        echo['status'] = 'failed';
+        echo['error'] = _ackReason(res);
         _toast('发送失败: ${_ackReason(res)}');
         return;
       }
+      echo['status'] = 'sent';
       _inputController.clear();
       setState(() => _pendingFiles.clear());
     } catch (e) {
+      echo['status'] = 'failed';
+      echo['error'] = '$e';
       _toast('发送失败: $e');
     } finally {
       if (mounted) {
@@ -388,6 +464,54 @@ class _ChatPageState extends State<ChatPage> {
           _progress = null;
         });
       }
+    }
+  }
+
+  Future<void> _retryEcho(Map<String, dynamic> echo) async {
+    if (_sending) return;
+    setState(() {
+      echo['status'] = 'sending';
+      echo['error'] = null;
+      _sending = true;
+    });
+    try {
+      final sessionId = _sessionId;
+      if (sessionId == null) throw StateError('尚无会话');
+      final files = (echo['files'] as List?)?.whereType<_PendingFile>().toList() ??
+          const <_PendingFile>[];
+      List<Map<String, dynamic>>? attachments =
+          (echo['attachments'] as List?)?.whereType<Map>().map(
+                (item) => item.cast<String, dynamic>(),
+              ).toList();
+      if (files.isNotEmpty && attachments == null) {
+        attachments = await _uploadFiles(files, sessionId);
+        echo['attachments'] = attachments;
+      }
+      final text = '${echo['text'] ?? ''}';
+      final res = echo['isGoal'] == true
+          ? await _transport.sendGoalCommand(
+              sessionId,
+              text.substring('/goal '.length).trim(),
+            )
+          : await _transport.sendText(
+              sessionId,
+              text,
+              attachments: attachments,
+            );
+      if (_ackRejected(res)) {
+        throw StateError(_ackReason(res));
+      }
+      if (mounted) setState(() => echo['status'] = 'sent');
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          echo['status'] = 'failed';
+          echo['error'] = '$e';
+        });
+        _toast('重试失败: $e');
+      }
+    } finally {
+      if (mounted) setState(() => _sending = false);
     }
   }
 
@@ -462,21 +586,24 @@ class _ChatPageState extends State<ChatPage> {
     try {
       final res = await _transport.rowsRange(
         sessionId,
-        beforeRowId: state.firstRowId,
+        beforeRowId: state.oldestRowId,
         limit: 60,
       );
       List? rows;
       int? firstRowId;
+      bool? hasMore;
       if (res is Map) {
         final rowsObj = res['rows'];
         if (rowsObj is Map) {
           rows = rowsObj['window'] as List? ?? rowsObj['rows'] as List?;
           firstRowId = (rowsObj['firstRowId'] as num?)?.toInt();
+          hasMore = rowsObj['hasMore'] as bool?;
         } else if (rowsObj is List) {
           rows = rowsObj;
         }
         rows ??= res['items'] as List? ?? res['window'] as List?;
         firstRowId ??= (res['firstRowId'] as num?)?.toInt();
+        hasMore ??= res['hasMore'] as bool?;
       } else if (res is List) {
         rows = res;
       }
@@ -488,10 +615,12 @@ class _ChatPageState extends State<ChatPage> {
           ..sort((a, b) => ((a['rowId'] as num?) ?? 0)
               .compareTo((b['rowId'] as num?) ?? 0));
         state.prependOlderRows(older, firstRowId);
+        if (hasMore == false) state.historyExhausted = true;
         // Prepending shifts the content above; keep the newest message in
         // view when the user is pinned to the bottom.
         if (_stickToBottom) _scrollToBottom();
       } else if (state.rows.isNotEmpty) {
+        if (hasMore == false) state.historyExhausted = true;
         _toast('没有更早的消息了');
       }
     } catch (e) {
@@ -703,8 +832,11 @@ class _ChatPageState extends State<ChatPage> {
                         builder: (context, _) {
                           final groups = _groupRows(state.rows);
                           final itemCount = groups.length +
+                              _echoes.length +
                               (state.canLoadOlder ? 1 : 0);
-                          if (groups.isEmpty && !state.canLoadOlder) {
+                          if (groups.isEmpty &&
+                              _echoes.isEmpty &&
+                              !state.canLoadOlder) {
                             return Center(
                                 child: Text('暂无消息',
                                     style:
@@ -737,8 +869,26 @@ class _ChatPageState extends State<ChatPage> {
                                   ),
                                 );
                               }
-                              final group = groups[
-                                  index - (state.canLoadOlder ? 1 : 0)];
+                              final contentIndex =
+                                  index - (state.canLoadOlder ? 1 : 0);
+                              if (contentIndex >= groups.length) {
+                                final echo =
+                                    _echoes[contentIndex - groups.length];
+                                return _UserBubble(
+                                  row: {
+                                    'kind': 'userInput',
+                                    'text': echo['text'],
+                                    'attachments': echo['attachments'],
+                                  },
+                                  transport: _transport,
+                                  sessionId: _sessionId ?? '',
+                                  badge: '${echo['status'] ?? 'sending'}',
+                                  onRetry: echo['status'] == 'failed'
+                                      ? () => _retryEcho(echo)
+                                      : null,
+                                );
+                              }
+                              final group = groups[contentIndex];
                               return _TurnGroupWidget(
                                 rows: group,
                                 transport: _transport,
@@ -1225,11 +1375,15 @@ class _UserBubble extends StatelessWidget {
   final Map<String, dynamic> row;
   final ConversationTransport transport;
   final String sessionId;
+  final String? badge;
+  final VoidCallback? onRetry;
 
   const _UserBubble({
     required this.row,
     required this.transport,
     required this.sessionId,
+    this.badge,
+    this.onRetry,
   });
 
   @override
@@ -1264,6 +1418,24 @@ class _UserBubble extends StatelessWidget {
             if (text.isNotEmpty)
               SelectableText(text,
                   style: const TextStyle(fontSize: 14, height: 1.5)),
+            if (badge != null)
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(badge!,
+                      style: TextStyle(
+                          fontSize: 10, color: ZInk.faint(context))),
+                  if (onRetry != null)
+                    TextButton(
+                      onPressed: onRetry,
+                      style: TextButton.styleFrom(
+                          padding: const EdgeInsets.only(left: 4),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+                      child: const Text('重试', style: TextStyle(fontSize: 10)),
+                    ),
+                ],
+              ),
           ],
         ),
       ),
@@ -1356,6 +1528,7 @@ class _AttachmentViewState extends State<_AttachmentView> {
         child: Image.memory(
           _imageBytes!,
           width: 220,
+          cacheWidth: 440,
           fit: BoxFit.cover,
         ),
       ),
@@ -1575,8 +1748,9 @@ class _ToolCallTile extends StatelessWidget {
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(8),
                   child: Image.memory(
-                    base64Decode(image['base64'] as String),
-                    fit: BoxFit.contain,
+                     base64Decode(image['base64'] as String),
+                     cacheWidth: (MediaQuery.sizeOf(context).width * 2).round(),
+                     fit: BoxFit.contain,
                     errorBuilder: (_, __, ___) =>
                         const SizedBox.shrink(),
                   ),
@@ -2373,9 +2547,13 @@ class _InteractionCardState extends State<_InteractionCard> {
                             horizontal: 12, vertical: 6),
                         minimumSize: Size.zero,
                       ),
-                      onPressed: _busy
-                          ? null
-                          : () => _resolve(optionId: '${option['optionId']}'),
+                       onPressed: _busy
+                           ? null
+                           : () => kind == 'permission'
+                               ? _resolve(
+                                   optionId: '${option['optionId']}')
+                               : _resolve(
+                                   action: 'accept', content: {}),
                       child: Text(
                         _optionLabel(option),
                         style: const TextStyle(fontSize: 12),
@@ -2387,8 +2565,10 @@ class _InteractionCardState extends State<_InteractionCard> {
             _QuestionsView(
               questions: questions.cast<Map>(),
               busy: _busy,
-              onResolve: (question, selected) =>
-                  _resolve(content: {question: selected}),
+              onResolve: (answers) => _resolve(
+                action: 'accept',
+                content: {'answers': answers},
+              ),
             ),
           if (freeText)
             Row(
@@ -2434,10 +2614,10 @@ class _InteractionCardState extends State<_InteractionCard> {
 
 /// Renders a form-style `userInput` interaction (the `questions` payload):
 /// the current question (by `currentQuestionIndex`) with its options.
-class _QuestionsView extends StatelessWidget {
+class _QuestionsView extends StatefulWidget {
   final List<Map> questions;
   final bool busy;
-  final void Function(String question, List<String> selected) onResolve;
+  final void Function(Map<String, List<String>> answers) onResolve;
 
   const _QuestionsView({
     required this.questions,
@@ -2446,18 +2626,41 @@ class _QuestionsView extends StatelessWidget {
   });
 
   @override
+  State<_QuestionsView> createState() => _QuestionsViewState();
+}
+
+class _QuestionsViewState extends State<_QuestionsView> {
+  final _answers = <String, List<String>>{};
+
+  @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (var i = 0; i < questions.length; i++)
+        for (var i = 0; i < widget.questions.length; i++)
           _QuestionItem(
             index: i,
-            question: questions[i],
-            busy: busy,
-            onSelect: (selected) =>
-                onResolve('${questions[i]['value'] ?? 'answer_$i'}', selected),
+            question: widget.questions[i],
+            busy: widget.busy,
+            selected: _answers['${widget.questions[i]['question']}'] ?? const [],
+            onChanged: (selected) => setState(() {
+              final key = '${widget.questions[i]['question']}';
+              if (selected.isEmpty) {
+                _answers.remove(key);
+              } else {
+                _answers[key] = selected;
+              }
+            }),
           ),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            onPressed: widget.busy || _answers.isEmpty
+                ? null
+                : () => widget.onResolve(Map.of(_answers)),
+            child: const Text('提交答案', style: TextStyle(fontSize: 12)),
+          ),
+        ),
       ],
     );
   }
@@ -2467,13 +2670,15 @@ class _QuestionItem extends StatefulWidget {
   final int index;
   final Map question;
   final bool busy;
-  final void Function(List<String> selected) onSelect;
+  final List<String> selected;
+  final void Function(List<String> selected) onChanged;
 
   const _QuestionItem({
     required this.index,
     required this.question,
     required this.busy,
-    required this.onSelect,
+    required this.selected,
+    required this.onChanged,
   });
 
   @override
@@ -2481,8 +2686,6 @@ class _QuestionItem extends StatefulWidget {
 }
 
 class _QuestionItemState extends State<_QuestionItem> {
-  final List<String> _selected = [];
-
   @override
   Widget build(BuildContext context) {
     final q = widget.question;
@@ -2515,37 +2718,29 @@ class _QuestionItemState extends State<_QuestionItem> {
                       FilterChip(
                         label: Text('${o['label'] ?? o['value'] ?? ''}',
                             style: const TextStyle(fontSize: 12)),
-                        selected: _selected.contains('${o['value']}'),
+                         selected: widget.selected.contains('${o['value']}'),
                         onSelected: widget.busy
                             ? null
                             : (on) {
                                 setState(() {
-                                  if (multi) {
-                                    if (on) {
-                                      _selected.add('${o['value']}');
-                                    } else {
-                                      _selected.remove('${o['value']}');
-                                    }
-                                  } else {
-                                    _selected
-                                      ..clear()
-                                      ..add('${o['value']}');
-                                  }
-                                });
-                                if (!multi) widget.onSelect(List.of(_selected));
+                                   final selected = List<String>.from(
+                                       widget.selected);
+                                   if (multi) {
+                                     if (on) {
+                                       selected.add('${o['value']}');
+                                     } else {
+                                       selected.remove('${o['value']}');
+                                     }
+                                   } else {
+                                     selected
+                                       ..clear()
+                                       ..add('${o['value']}');
+                                   }
+                                   widget.onChanged(selected);
+                                 });
                               },
                       ),
                 ],
-              ),
-            ),
-          if (multi)
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: widget.busy
-                    ? null
-                    : () => widget.onSelect(List.of(_selected)),
-                child: const Text('提交', style: TextStyle(fontSize: 12)),
               ),
             ),
         ],

@@ -26,6 +26,9 @@ class ValueWriter {
 }
 
 class ValueReader {
+  static const maxContainerItems = 100000;
+  static const maxValueBytes = 16 * 1024 * 1024;
+
   final Uint8List data;
   int pos = 0;
 
@@ -49,6 +52,9 @@ class ValueReader {
     var shift = 0;
     while (pos < data.length) {
       final b = data[pos++];
+      if (shift == 28 && (b & 0xF0) != 0) {
+        throw FormatException('ValueReader: varint overflow at pos $pos');
+      }
       value |= (b & 0x7F) << shift;
       if ((b & 0x80) == 0) return value;
       shift += 7;
@@ -93,15 +99,30 @@ Object? decodeValue(ValueReader r) {
     case 0:
       return null;
     case 1:
-      return utf8.decode(r.read(r.readVarint()));
+      final length = r.readVarint();
+      if (length > ValueReader.maxValueBytes) {
+        throw FormatException('ValueReader: string too large');
+      }
+      return utf8.decode(r.read(length));
     case 2:
     case 3:
-      return r.read(r.readVarint());
+      final length = r.readVarint();
+      if (length > ValueReader.maxValueBytes) {
+        throw FormatException('ValueReader: bytes too large');
+      }
+      return r.read(length);
     case 4:
       final count = r.readVarint();
+      if (count > ValueReader.maxContainerItems) {
+        throw FormatException('ValueReader: list too large');
+      }
       return List<Object?>.generate(count, (_) => decodeValue(r));
     case 5:
-      return jsonDecode(utf8.decode(r.read(r.readVarint())));
+      final length = r.readVarint();
+      if (length > ValueReader.maxValueBytes) {
+        throw FormatException('ValueReader: object too large');
+      }
+      return jsonDecode(utf8.decode(r.read(length)));
     case 6:
       return r.readVarint();
     default:

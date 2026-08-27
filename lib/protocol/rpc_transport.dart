@@ -116,21 +116,43 @@ class RpcFrameTransport {
       return true;
     }
 
-    final assembly = _assemblies.putIfAbsent(
-      messageSeq,
-      () => _Assembly(fragmentCount, messageBytes, checksum),
-    );
+    if (messageSeq < 0 ||
+        fragmentCount < 1 ||
+        fragmentCount > maxFragments ||
+        fragmentIndex < 0 ||
+        fragmentIndex >= fragmentCount ||
+        messageBytes < 1 ||
+        messageBytes > maxMessageBytes) {
+      return true;
+    }
+
     Uint8List? chunk;
     try {
       chunk = base64.decode(dataBase64);
     } catch (_) {
       return true;
     }
+    if (chunk.length > _fragmentPayloadBytes) return true;
+
+    final existing = _assemblies[messageSeq];
+    if (existing != null &&
+        (existing.fragmentCount != fragmentCount ||
+            existing.messageBytes != messageBytes ||
+            existing.checksum != checksum)) {
+      _assemblies.remove(messageSeq);
+      return true;
+    }
+    final assembly = _assemblies.putIfAbsent(
+      messageSeq,
+      () => _Assembly(fragmentCount, messageBytes, checksum),
+    );
     assembly.add(fragmentIndex, chunk);
     if (assembly.isComplete) {
       _assemblies.remove(messageSeq);
       final message = assembly.assemble();
-      if (assembly.checksum == null ||
+      if (message.length != assembly.messageBytes) {
+        onLog?.call('[rpc] message $messageSeq size mismatch');
+      } else if (assembly.checksum == null ||
           Crc32.hexOf(message) == assembly.checksum) {
         onLog?.call(
             '[rpc] message $messageSeq assembled (${message.length} bytes)');

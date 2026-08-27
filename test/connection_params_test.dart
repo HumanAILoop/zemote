@@ -73,11 +73,11 @@ void main() {
       expect(params!.relayWsUri.toString(), 'wss://zcode.z.ai/ws?mid=m');
     });
 
-    test('http → ws', () {
+    test('http is rejected', () {
       final params = ZemoteConnectionParams.parse(
         'http://localhost:3000/remote/v4?sid=s&hash=h&t=1',
       );
-      expect(params!.relayWsUri.toString(), 'ws://localhost:3000/ws');
+      expect(params, isNull);
     });
 
     test('port is preserved', () {

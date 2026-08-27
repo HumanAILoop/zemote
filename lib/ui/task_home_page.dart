@@ -16,6 +16,51 @@ import 'task_detail_page.dart';
 import 'theme.dart';
 import 'ui_settings.dart';
 
+List<Map<String, dynamic>> mergeWorkspaceSessionTasks({
+  required List<dynamic> channelTasks,
+  required List<SessionEntry> sessions,
+  required Set<String> archivedIds,
+  required Map<String, dynamic> workspace,
+}) {
+  final bySessionId = <String, Map<String, dynamic>>{
+    for (final entry in sessions)
+      if (!archivedIds.contains(entry.sessionId))
+        entry.sessionId: {
+          'taskId': entry.sessionId,
+          if (entry.title.isNotEmpty) 'title': entry.title,
+          'displayStatus': switch (entry.phase) {
+            'running' || 'prewarming' => 'running',
+            'completedSuccess' || 'completedInterrupted' => 'completed',
+            'error' => 'error',
+            'draft' => 'draft',
+            _ => entry.phase,
+          },
+          'lastAssistantPreview': entry.lastAssistantPreview,
+          if (entry.lastActivityAt > 0) 'updatedAt': entry.lastActivityAt,
+          if (entry.createdAt > 0) 'createdAt': entry.createdAt,
+          'hasBackgroundWork': entry.hasBackgroundWork,
+          'workspacePath': workspace['workspacePath'],
+          if (workspace['workspaceIdentity'] != null)
+            'workspaceIdentity': workspace['workspaceIdentity'],
+        },
+  };
+  final merged = <String, Map<String, dynamic>>{};
+  for (final task in channelTasks) {
+    if (task is! Map || task['taskId'] == null) continue;
+    final id = '${task['taskId']}';
+    if (archivedIds.contains(id)) continue;
+    final session = bySessionId.remove(id);
+    merged[id] = {
+      ...task.cast<String, dynamic>(),
+      if (session != null) ...session,
+    };
+  }
+  merged.addAll(bySessionId);
+  return merged.values.toList()
+    ..sort((a, b) => ((b['updatedAt'] as num?) ?? 0)
+        .compareTo((a['updatedAt'] as num?) ?? 0));
+}
+
 /// Task home of one workspace: search, tabs (任务/置顶/已归档), swipe
 /// actions, live updates from `workspace-list-updated`.
 class TaskHomePage extends StatefulWidget {
@@ -104,6 +149,11 @@ class _TaskHomePageState extends State<TaskHomePage>
           if (t is! Map || t['taskId'] == null) continue;
           final id = '${t['taskId']}';
           final map = (t).cast<String, dynamic>();
+          // workspace-list-updated is global. It may contain tasks from
+          // another workspace, so it may only update ids already known by
+          // this page. New tasks arrive through the workspace-scoped
+          // sessions-index subscription.
+          if (!byId.containsKey(id)) continue;
           // Partition by the workspace-list flags: archived tasks belong
           // to the archived tab, never the active list.
           if (map['archived'] == true || map['deleted'] == true) {
@@ -151,27 +201,6 @@ class _TaskHomePageState extends State<TaskHomePage>
     }
   }
 
-  String _mapPhase(String phase) => switch (phase) {
-        'running' || 'prewarming' => 'running',
-        'completedSuccess' || 'completedInterrupted' => 'completed',
-        'error' => 'error',
-        'draft' => 'draft',
-        _ => phase,
-      };
-
-  Map<String, dynamic> _entryToTask(SessionEntry e) => {
-        'taskId': e.sessionId,
-        'title': e.title,
-        'displayStatus': _mapPhase(e.phase),
-        'lastAssistantPreview': e.lastAssistantPreview,
-        'updatedAt': e.lastActivityAt,
-        'createdAt': e.createdAt,
-        'hasBackgroundWork': e.hasBackgroundWork,
-        'workspacePath': widget.workspace['workspacePath'],
-        if (widget.workspace['workspaceIdentity'] != null)
-          'workspaceIdentity': widget.workspace['workspaceIdentity'],
-      };
-
   void _mergeSessions() {
     final sub = _sessionsSub;
     if (sub == null || !mounted) return;
@@ -181,34 +210,15 @@ class _TaskHomePageState extends State<TaskHomePage>
             !_archivedIds.contains(e.sessionId))
         .toList();
     if (entries.isEmpty && _tasks.isEmpty) return;
-    setState(() {
-      final byId = <String, Map<String, dynamic>>{};
-      for (final e in entries) {
-        byId[e.sessionId] = _entryToTask(e);
-      }
-      final merged = <String, Map<String, dynamic>>{};
-      // channel tasks enriched with preview/phase from sessions-index
-      for (final t in _tasks) {
-        if (t is Map && t['taskId'] != null) {
-          final id = '${t['taskId']}';
-          if (_isRecentlyRemoved(id) || _archivedIds.contains(id)) {
-            continue;
-          }
-          final entry = byId.remove(id);
-          merged[id] = {
-            ...(t).cast<String, dynamic>(),
-            if (entry != null) ...{
-              'lastAssistantPreview': entry['lastAssistantPreview'],
-              'hasBackgroundWork': entry['hasBackgroundWork'],
-            },
-          };
-        }
-      }
-      final list = merged.values.toList()
-        ..sort((a, b) => ((b['updatedAt'] as num?) ?? 0)
-            .compareTo((a['updatedAt'] as num?) ?? 0));
-      _tasks = list;
-    });
+    setState(() => _tasks = mergeWorkspaceSessionTasks(
+          channelTasks: _tasks.where((task) {
+            if (task is! Map || task['taskId'] == null) return false;
+            return !_isRecentlyRemoved('${task['taskId']}');
+          }).toList(),
+          sessions: entries,
+          archivedIds: _archivedIds,
+          workspace: widget.workspace,
+        ));
   }
 
   Future<void> _load() async {
@@ -241,6 +251,7 @@ class _TaskHomePageState extends State<TaskHomePage>
           ]);
         _loading = false;
       });
+      _mergeSessions();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -286,11 +297,11 @@ class _TaskHomePageState extends State<TaskHomePage>
         .catchError((Object e) => log('[task] markRead failed: $e'));
   }
 
-  void _openTask(Map<String, dynamic> task) {
+  Future<void> _openTask(Map<String, dynamic> task) async {
     final taskId = task['taskId'] ?? task['id'];
     if (taskId == null) return;
     _markRead(task);
-    Navigator.of(context).push(
+    await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ChatPage(
           session: widget.session,
@@ -301,6 +312,9 @@ class _TaskHomePageState extends State<TaskHomePage>
         ),
       ),
     );
+    if (!mounted) return;
+    await _load();
+    _mergeSessions();
   }
 
   Future<void> _action(
@@ -513,9 +527,9 @@ class _TaskHomePageState extends State<TaskHomePage>
     );
   }
 
-  void _newChat() {
+  Future<void> _newChat() async {
     if (_workspaceKey.isEmpty) return;
-    Navigator.of(context).push(
+    await Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ChatPage(
           session: widget.session,
@@ -525,6 +539,9 @@ class _TaskHomePageState extends State<TaskHomePage>
         ),
       ),
     );
+    if (!mounted) return;
+    await _load();
+    _mergeSessions();
   }
 
   /// quickPick-style command palette (mirrors the web quickPick).

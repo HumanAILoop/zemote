@@ -3,6 +3,21 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zemote/ui/chat_page.dart';
 
 void main() {
+  test('duplicate text confirmations retire echoes one at a time', () {
+    final List<Map<String, dynamic>> echoes = [
+      {'text': 'same', 'status': 'sent'},
+      {'text': 'same', 'status': 'sent'},
+      {'text': 'failed', 'status': 'failed'},
+    ];
+    final List<Map<String, dynamic>> rows = [
+      {'kind': 'userInput', 'text': 'same'},
+    ];
+    final remaining = removeEchoedTexts(echoes, rows);
+    expect(remaining, hasLength(2));
+    expect(remaining[0]['text'], 'same');
+    expect(remaining[1]['text'], 'failed');
+  });
+
   group('assistantTurnParts', () {
     test('preserves original order: reasoning → text → tool → text', () {
       final parts = assistantTurnParts([

@@ -38,7 +38,10 @@ class ZemoteConnectionParams {
     final sid = _get(uri, 'sid');
     final hash = _get(uri, 'hash');
     final t = int.tryParse(_get(uri, 't') ?? '');
-    if (sid == null || hash == null || t == null) return null;
+    if ((uri.scheme != 'https' && uri.scheme != 'wss') ||
+        sid == null ||
+        hash == null ||
+        t == null) return null;
     return ZemoteConnectionParams(
       deviceSid: sid,
       passHash: hash,

@@ -120,4 +120,12 @@ void main() {
     expect(events[0], {'frame': 'hello'});
     client.dispose();
   });
+
+  test('malformed header is ignored without throwing', () {
+    final client = ChannelClient(sendBody: (b) => sent.add(b));
+    final w = ValueWriter();
+    encodeValue(w, [ChannelClient.resPromiseSuccess]);
+    expect(() => client.handleMessage(w.toBytes()), returnsNormally);
+    client.dispose();
+  });
 }

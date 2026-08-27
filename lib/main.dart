@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import 'protocol/relay_client.dart';
 import 'state/account_store.dart';
 import 'state/app_session.dart';
+import 'state/log_store.dart';
+import 'state/crash_report_service.dart';
 import 'ui/accounts_page.dart';
 import 'ui/theme.dart';
 import 'ui/ui_settings.dart';
@@ -11,7 +16,24 @@ import 'notifications/notifications.dart';
 
 final navigatorKey = GlobalKey<NavigatorState>();
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  try {
+    final prefs = await SharedPreferences.getInstance();
+    RelayClient.verboseFrames =
+        prefs.getBool('relayVerboseFrames') ?? kDebugMode;
+  } catch (_) {
+    RelayClient.verboseFrames = kDebugMode;
+  }
+  if (!kIsWeb) {
+    try {
+      await crashReports.initialize();
+      final previous = await crashReports.read();
+      if (previous != null) {
+        log('[诊断] 检测到上次异常退出（${previous.kind}）— 请检查诊断日志');
+      }
+    } catch (_) {}
+  }
   runApp(const ZemoteApp());
 }
 

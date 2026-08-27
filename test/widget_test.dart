@@ -25,6 +25,11 @@ void main() {
   test('reject invalid url', () {
     expect(ZemoteConnectionParams.parse('https://zcode.z.ai/remote/v4'), isNull);
     expect(ZemoteConnectionParams.parse('not a url'), isNull);
+    expect(
+      ZemoteConnectionParams.parse(
+          'http://zcode.z.ai/remote/v4?sid=s&hash=h&t=1'),
+      isNull,
+    );
   });
 
   test('proof is hmac-sha256 base64url', () {

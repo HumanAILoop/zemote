@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'channel_client.dart';
 import 'id.dart';
 import 'zemote_client.dart';
+import '../update/app_version.dart' as version_info;
 
 /// Conversation V4 protocol over the `zcode-agent` channel.
 ///
@@ -39,7 +40,7 @@ class ConversationTransport {
   ConversationTransport({
     required this.session,
     required this.scope,
-    this.appVersion = '3.6.5',
+    this.appVersion = version_info.appVersion,
     this.onLog,
   }) {
     // A reopened bridge has no handshake state — start over (mirrors the
@@ -85,7 +86,12 @@ class ConversationTransport {
   Future<ConversationSubscription> subscribe(String sessionId) async {
     await handshake();
     final subscription = ConversationSubscription._(this, sessionId);
-    await subscription._start();
+    try {
+      await subscription._start();
+    } catch (_) {
+      await subscription.dispose();
+      rethrow;
+    }
     _subscriptions[sessionId] = subscription;
     return subscription;
   }
@@ -650,7 +656,12 @@ class ConversationTransport {
   Future<SessionsIndexSubscription> subscribeSessionsIndex() async {
     await handshake();
     final subscription = SessionsIndexSubscription._(this);
-    await subscription._start();
+    try {
+      await subscription._start();
+    } catch (_) {
+      await subscription.dispose();
+      rethrow;
+    }
     return subscription;
   }
 
@@ -784,35 +795,44 @@ abstract class _SubscriptionBase<T extends ChangeNotifier> {
   }
 
   Future<void> _start() async {
-    await _transport.handshake();
-    _cancelFrameListener = _transport._channels.addEventListener(
-      ConversationTransport.channel,
-      _frameEventName,
-      _handleWireFrame,
-      arg: _transport.scope,
-    );
-    final res = await _transport._channels.call(
-      ConversationTransport.channel,
-      _subscribeMethod,
-      [{..._transport.scope, ..._subscribeArgs}],
-      // The desktop may need to warm the session runtime before answering —
-      // give the subscribe call generous room instead of timing out at the
-      // 30s channel default.
-      timeout: const Duration(seconds: 60),
-    );
-    final ack = (res as Map?)?['ack'] as Map?;
-    _subscriptionId = ack?['subscriptionId'] as String?;
-    _transport._log('[$_logTag] subscribed $topic id=$_subscriptionId');
-    if (_subscriptionId == null) {
-      throw StateError('$_subscribeMethod: missing ack.subscriptionId');
+    try {
+      await _transport.handshake();
+      _cancelFrameListener = _transport._channels.addEventListener(
+        ConversationTransport.channel,
+        _frameEventName,
+        _handleWireFrame,
+        arg: _transport.scope,
+      );
+      final res = await _transport._channels.call(
+        ConversationTransport.channel,
+        _subscribeMethod,
+        [{..._transport.scope, ..._subscribeArgs}],
+        // The desktop may need to warm the session runtime before answering —
+        // give the subscribe call generous room instead of timing out at the
+        // 30s channel default.
+        timeout: const Duration(seconds: 60),
+      );
+      final ack = (res as Map?)?['ack'] as Map?;
+      _subscriptionId = ack?['subscriptionId'] as String?;
+      _transport._log('[$_logTag] subscribed $topic id=$_subscriptionId');
+      if (_subscriptionId == null) {
+        throw StateError('$_subscribeMethod: missing ack.subscriptionId');
+      }
+      _onSubscribeAck(ack?.cast<String, dynamic>() ?? const {});
+      final staged = List<Map<String, dynamic>>.from(_stagedFrames);
+      _stagedFrames.clear();
+      for (final frame in staged) {
+        _acceptLogicalFrame(frame);
+      }
+      _onStarted();
+    } catch (_) {
+      _cancelFrameListener?.call();
+      _cancelFrameListener = null;
+      _subscriptionId = null;
+      _stagedFrames.clear();
+      _fragments.clear();
+      rethrow;
     }
-    _onSubscribeAck(ack?.cast<String, dynamic>() ?? const {});
-    final staged = List<Map<String, dynamic>>.from(_stagedFrames);
-    _stagedFrames.clear();
-    for (final frame in staged) {
-      _acceptLogicalFrame(frame);
-    }
-    _onStarted();
   }
 
   void _onBridgeRecovered() {
@@ -883,9 +903,20 @@ abstract class _SubscriptionBase<T extends ChangeNotifier> {
     if (id == null || index == null || count == null || dataBase64 == null) {
       return;
     }
-    final assembly =
-        _fragments.putIfAbsent(id, () => _LogicalFrameAssembly(count));
-    assembly.add(index, base64.decode(dataBase64));
+    if (count < 1 || count > 64 || index < 0 || index >= count) return;
+    final assembly = _fragments.putIfAbsent(
+        id, () => _LogicalFrameAssembly(count));
+    if (assembly.count != count) {
+      _fragments.remove(id);
+      return;
+    }
+    try {
+      assembly.add(index, base64.decode(dataBase64));
+    } catch (e) {
+      _fragments.remove(id);
+      _transport._log('[$_logTag] bad fragment: $e');
+      return;
+    }
     if (assembly.isComplete) {
       _fragments.remove(id);
       try {
@@ -1270,6 +1301,7 @@ class ConversationState extends ChangeNotifier {
   int? firstRowId;
   int totalCount = 0;
   bool ready = false;
+  bool historyExhausted = false;
 
   void applyFrame(
     Map<String, dynamic> frame, {
@@ -1311,12 +1343,24 @@ class ConversationState extends ChangeNotifier {
     final rowsObj = snap['rows'];
     if (rowsObj is Map) {
       final window = rowsObj['window'];
-      rows = window is List
-          ? window
-              .whereType<Map>()
-              .map((e) => e.cast<String, dynamic>())
-              .toList()
-          : [];
+      if (window is List) {
+        final windowRows = window
+            .whereType<Map>()
+            .map((e) => e.cast<String, dynamic>())
+            .toList();
+        final head = windowRows.isEmpty
+            ? null
+            : (windowRows.first['rowId'] as num?)?.toInt();
+        final older = head == null
+            ? <Map<String, dynamic>>[]
+            : rows.where((r) {
+                final id = (r['rowId'] as num?)?.toInt();
+                return id != null && id < head;
+              }).toList();
+        rows = [...older, ...windowRows];
+      } else {
+        rows = [];
+      }
       totalCount = (rowsObj['totalCount'] as num?)?.toInt() ?? rows.length;
       firstRowId = (rowsObj['firstRowId'] as num?)?.toInt();
     } else {
@@ -1503,7 +1547,13 @@ class ConversationState extends ChangeNotifier {
 
   /// Older history exists beyond the current window.
   bool get canLoadOlder =>
-      firstRowId != null && totalCount > rows.length;
+      !historyExhausted && firstRowId != null && totalCount > rows.length;
+
+  /// The cursor for `rowsRange` is the oldest row currently held, not the
+  /// snapshot projection head (`firstRowId`).
+  int? get oldestRowId => rows.isEmpty
+      ? firstRowId
+      : (rows.first['rowId'] as num?)?.toInt();
 
   /// Prepends older rows loaded via rowsRange (deduped by rowId).
   void prependOlderRows(List<Map<String, dynamic>> older, int? newFirstRowId) {

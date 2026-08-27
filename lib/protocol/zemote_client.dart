@@ -418,6 +418,8 @@ class ZemoteClient {
     );
   }
 
+  void pokeRelay() => relay.poke();
+
   Future<void> dispose() async {
     relay.stateListenable.removeListener(_onRelayState);
     await _payloadSub?.cancel();

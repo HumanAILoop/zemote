@@ -104,6 +104,36 @@ void main() {
     );
   });
 
+  test('rejects invalid fragment metadata without allocating', () {
+    expect(
+      transport.acceptPayload({
+        'zcode_type': 'rpc-frame',
+        'bridgeSessionId': 'bridge-1',
+        'messageSeq': 1,
+        'fragmentIndex': 0,
+        'fragmentCount': RpcFrameTransport.maxFragments + 1,
+        'messageBytes': 3,
+        'dataBase64': base64.encode([1, 2, 3]),
+      }),
+      isTrue,
+    );
+    expect(received, isEmpty);
+  });
+
+  test('rejects assembled message with incorrect declared size', () async {
+    transport.acceptPayload({
+      'zcode_type': 'rpc-frame',
+      'bridgeSessionId': 'bridge-1',
+      'messageSeq': 1,
+      'fragmentIndex': 0,
+      'fragmentCount': 1,
+      'messageBytes': 4,
+      'dataBase64': base64.encode([1, 2, 3]),
+    });
+    await Future.delayed(Duration.zero);
+    expect(received, isEmpty);
+  });
+
   test('invalid base64 data is handled gracefully', () {
     expect(
       transport.acceptPayload({

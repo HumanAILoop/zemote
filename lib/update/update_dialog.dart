@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -50,6 +51,11 @@ class _UpdateDialogState extends State<_UpdateDialog> {
       _openRelease();
       return;
     }
+    if (widget.info.checksumUrl == null) {
+      if (mounted) setState(() => _error = '该发布缺少 SHA-256 校验值，请手动下载安装');
+      _openRelease();
+      return;
+    }
     final canInstall =
         await apkChannel.invokeMethod<bool>('canInstall') ?? false;
     if (!canInstall) {
@@ -64,11 +70,26 @@ class _UpdateDialogState extends State<_UpdateDialog> {
     try {
       final dir = await apkChannel.invokeMethod<String>('getApkDir');
       final file = File('$dir/zemote-${widget.info.latestVersion}.apk');
-      if (file.existsSync()) file.deleteSync();
       await _download(apkUrl, file.path, (p) {
         if (mounted) setState(() => _progress = p);
       });
       if (!mounted) return;
+      final checksumResponse = await http
+          .get(Uri.parse(widget.info.checksumUrl!))
+          .timeout(const Duration(seconds: 15));
+      if (checksumResponse.statusCode != 200) {
+        throw HttpException('校验文件 HTTP ${checksumResponse.statusCode}');
+      }
+      final expected = parseChecksumHex(checksumResponse.body);
+      final actual = (await sha256.bind(file.openRead()).first).toString();
+      if (expected == null || expected != actual) {
+        file.deleteSync();
+        setState(() {
+          _phase = _Phase.prompt;
+          _error = 'SHA-256 校验失败，已取消安装';
+        });
+        return;
+      }
       final ok = await apkChannel
               .invokeMethod<bool>('installApk', {'path': file.path}) ??
           false;
@@ -117,13 +138,27 @@ class _UpdateDialogState extends State<_UpdateDialog> {
   ) async {
     final client = http.Client();
     try {
-      final res = await client.send(http.Request('GET', Uri.parse(url)));
-      if (res.statusCode != 200) {
+      final target = File(path);
+      var start = target.existsSync() ? target.lengthSync() : 0;
+      final request = http.Request('GET', Uri.parse(url));
+      if (start > 0) request.headers['Range'] = 'bytes=$start-';
+      final res = await client.send(request);
+      final resumed = res.statusCode == 206;
+      if (res.statusCode != 200 && !resumed) {
         throw HttpException('HTTP ${res.statusCode}');
       }
-      final total = res.contentLength;
-      var received = 0;
-      final sink = File(path).openWrite();
+      if (start > 0 && !resumed) {
+        start = 0;
+        target.deleteSync();
+      }
+      final total = resumed
+          ? int.tryParse(RegExp(r'/([0-9]+)\s*$')
+                  .firstMatch(res.headers['content-range'] ?? '')
+                  ?.group(1) ?? '')
+          : res.contentLength;
+      var received = start;
+      final sink = target.openWrite(
+          mode: resumed ? FileMode.append : FileMode.write);
       try {
         await for (final chunk in res.stream) {
           received += chunk.length;

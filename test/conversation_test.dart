@@ -259,6 +259,41 @@ void main() {
       expect(state.canLoadOlder, isTrue);
     });
 
+    test('oldestRowId uses the oldest held row as pagination cursor', () {
+      _injectSnapshot(state, rows: [
+        {'rowId': 10, 'kind': 'user', 'text': 'latest'},
+      ], totalCount: 20, firstRowId: 1);
+      expect(state.oldestRowId, 10);
+    });
+
+    test('resync snapshot preserves paged-in older rows', () {
+      _injectSnapshot(state, rows: [
+        {'rowId': 10, 'kind': 'user', 'text': 'tail'},
+      ], totalCount: 10, firstRowId: 1);
+      state.prependOlderRows([
+        {'rowId': 1, 'kind': 'user', 'text': 'older'},
+      ], 1);
+
+      state.applyFrame({
+        'payload': {
+          'kind': 'snapshot',
+          'snapshot': {
+            'rows': {
+              'window': [
+                {'rowId': 10, 'kind': 'user', 'text': 'fresh tail'},
+              ],
+              'totalCount': 10,
+              'firstRowId': 1,
+            },
+          },
+        },
+        'toSeq': 2,
+      }, onGap: () => fail('snapshot should not gap'));
+
+      expect(state.rows.map((row) => row['rowId']), [1, 10]);
+      expect(state.rows.last['text'], 'fresh tail');
+    });
+
     test('canLoadOlder is false when all rows loaded', () {
       _injectSnapshot(state, rows: [
         {'rowId': 1, 'kind': 'user', 'text': 'first'},

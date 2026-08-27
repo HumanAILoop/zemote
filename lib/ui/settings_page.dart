@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import '../protocol/relay_client.dart';
 import '../protocol/zemote_client.dart';
 import '../update/app_version.dart';
 import '../update/update_checker.dart';
@@ -165,16 +167,17 @@ class SettingsPage extends StatelessWidget {
         Card(
           child: Column(
             children: [
-              ListTile(
+               ListTile(
                 leading: const Icon(Icons.terminal, size: 20),
                 title: const Text('协议日志'),
                 subtitle: const Text('查看 relay / IPC / V4 帧日志',
                     style: TextStyle(fontSize: 12)),
                 trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const LogPage())),
-              ),
-              if (client != null) ...[
+                 onTap: () => Navigator.of(context).push(
+                     MaterialPageRoute(builder: (_) => const LogPage())),
+               ),
+               _VerboseFramesSetting(),
+               if (client != null) ...[
                 const Divider(indent: 52),
                 ListTile(
                   leading: const Icon(Icons.bug_report_outlined, size: 20),
@@ -324,4 +327,26 @@ class SettingsPage extends StatelessWidget {
           .showSnackBar(SnackBar(content: Text('检查更新失败: $e')));
     }
   }
+}
+
+class _VerboseFramesSetting extends StatefulWidget {
+  @override
+  State<_VerboseFramesSetting> createState() => _VerboseFramesSettingState();
+}
+
+class _VerboseFramesSettingState extends State<_VerboseFramesSetting> {
+  @override
+  Widget build(BuildContext context) => SwitchListTile(
+        secondary: const Icon(Icons.article_outlined, size: 20),
+        title: const Text('协议帧日志（详细）'),
+        subtitle: const Text('记录完整 relay 帧，可能包含敏感数据',
+            style: TextStyle(fontSize: 12)),
+        value: RelayClient.verboseFrames,
+        onChanged: (value) async {
+          RelayClient.verboseFrames = value;
+          setState(() {});
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setBool('relayVerboseFrames', value);
+        },
+      );
 }

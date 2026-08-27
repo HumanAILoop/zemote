@@ -25,4 +25,13 @@ void main() {
       expect(compareVersions('1.x', '1.0.0'), 0);
     });
   });
+
+  test('parseChecksumHex accepts sha256sum output', () {
+    expect(
+      parseChecksumHex(
+          'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA  app.apk'),
+      'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    );
+    expect(parseChecksumHex('not a checksum'), isNull);
+  });
 }

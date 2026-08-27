@@ -48,6 +48,12 @@ void main() {
       expect(() => reader.readVarint(), throwsFormatException);
     });
 
+    test('varint overflow throws FormatException', () {
+      final reader = ValueReader(
+          Uint8List.fromList([0xFF, 0xFF, 0xFF, 0xFF, 0x10]));
+      expect(() => reader.readVarint(), throwsFormatException);
+    });
+
     test('empty data throws FormatException', () {
       final reader = ValueReader(Uint8List(0));
       expect(() => reader.readVarint(), throwsFormatException);

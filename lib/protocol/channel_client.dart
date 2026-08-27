@@ -32,18 +32,22 @@ class ChannelClient {
   Future<void> get ready => _initialized.future;
 
   void handleMessage(Uint8List body) {
-    final reader = ValueReader(body);
-    final header = decodeValue(reader);
-    if (header is! List || header.isEmpty) return;
-    final type = (header[0] as num).toInt();
-    if (type == resInitialize) {
-      onLog?.call('[ipc] initialized');
-      if (!_initialized.isCompleted) _initialized.complete();
-      return;
+    try {
+      final reader = ValueReader(body);
+      final header = decodeValue(reader);
+      if (header is! List || header.length < 2) return;
+      final type = (header[0] as num).toInt();
+      if (type == resInitialize) {
+        onLog?.call('[ipc] initialized');
+        if (!_initialized.isCompleted) _initialized.complete();
+        return;
+      }
+      final id = (header[1] as num).toInt();
+      final data = decodeValue(reader);
+      _handlers[id]?.call(type, data);
+    } on Object catch (e) {
+      onLog?.call('[ipc] invalid frame: $e');
     }
-    final id = (header[1] as num).toInt();
-    final data = decodeValue(reader);
-    _handlers[id]?.call(type, data);
   }
 
   void _sendRequest(int reqType, int id, String channel, String name,
@@ -104,16 +108,21 @@ class ChannelClient {
     Object? arg,
   }) {
     final id = _lastRequestId++;
+    var sent = false;
+    var cancelled = false;
     _handlers[id] = (type, data) {
       if (type == resEventFire) onEvent(data);
     };
     ready.then((_) {
+      if (cancelled) return;
+      sent = true;
       onLog?.call('[ipc] listen $channel.$event id=$id');
       _sendRequest(reqEventListen, id, channel, event, arg);
     });
     return () {
+      cancelled = true;
       _handlers.remove(id);
-      _sendRequest(reqEventDispose, id, channel, event, null);
+      if (sent) _sendRequest(reqEventDispose, id, channel, event, null);
     };
   }
 

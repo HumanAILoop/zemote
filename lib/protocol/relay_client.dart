@@ -59,6 +59,7 @@ class RelayClient {
   static const heartbeatAckTimeout = Duration(seconds: 30);
   static const waitingTimeout = Duration(seconds: 30);
   static const reconnectWaitTimeout = Duration(seconds: 20);
+  static const _deadLinkThreshold = Duration(seconds: 25);
 
   WebSocketChannel? _socket;
   StreamSubscription? _socketSub;
@@ -78,6 +79,13 @@ class RelayClient {
   bool _intentionallyClosed = false;
   bool _disposed = false;
   int _reconnectAttempt = 0;
+  int _heartbeatTick = 0;
+  bool _staleProbeSent = false;
+  DateTime _lastInboundAt = DateTime.now();
+
+  /// Raw frame logging is expensive and can expose payload contents. Keep it
+  /// off by default; connection diagnostics remain logged separately.
+  static bool verboseFrames = false;
   DateTime _lastPairStatusAckAt = DateTime.now();
 
   Timer? _heartbeatTimer;
@@ -105,8 +113,10 @@ class RelayClient {
   Future<void> _connect() async {
     _socketSub?.cancel();
     _socket?.sink.close();
+    _lastPairStatusAckAt = DateTime.now();
+    _lastInboundAt = DateTime.now();
     final uri = params.relayWsUri;
-    _log('[relay] connecting $uri');
+    _log('[relay] connecting ${_safeUriForLog(uri)}');
     WebSocketChannel socket;
     try {
       socket = WebSocketChannel.connect(uri);
@@ -144,8 +154,17 @@ class RelayClient {
   void _send(Map<String, dynamic> frame) {
     final socket = _socket;
     if (socket == null) return;
-    _log('[relay] >> ${jsonEncode(frame)}');
+    if (verboseFrames) _log('[relay] >> ${jsonEncode(frame)}');
     socket.sink.add(jsonEncode(frame));
+  }
+
+  Uri _safeUriForLog(Uri uri) {
+    return uri.replace(
+      queryParameters: {
+        for (final entry in uri.queryParameters.entries)
+          entry.key: '<redacted>',
+      },
+    );
   }
 
   /// Outbound data payloads are queued while unpaired (reconnecting /
@@ -184,10 +203,11 @@ class RelayClient {
   }
 
   void _handleRawMessage(dynamic data) {
+    _lastInboundAt = DateTime.now();
     Map<String, dynamic>? frame;
     try {
       final text = data is String ? data : utf8.decode(data as List<int>);
-      _log('[relay] << $text');
+      if (verboseFrames) _log('[relay] << $text');
       final decoded = jsonDecode(text);
       if (decoded is Map<String, dynamic> && decoded.containsKey('type')) {
         frame = decoded;
@@ -230,6 +250,7 @@ class RelayClient {
 
   void _applyPairStatus(String? status) {
     _lastPairStatusAckAt = DateTime.now();
+    _staleProbeSent = false;
     if (status == 'waiting') {
       if (_wasPaired) {
         _clearWaitingTimer();
@@ -294,9 +315,37 @@ class RelayClient {
     _heartbeatTimer?.cancel();
     _heartbeatTimer = Timer.periodic(heartbeatInterval, (_) {
       if (state != RelayState.paired && state != RelayState.waiting) return;
+      _heartbeatTick++;
+      if (state == RelayState.waiting && _heartbeatTick.isOdd) return;
       if (DateTime.now().difference(_lastPairStatusAckAt) >
           heartbeatAckTimeout) {
-        _log('[relay] heartbeat ack timeout, reconnecting');
+        if (!_staleProbeSent) {
+          _staleProbeSent = true;
+          _log('[relay] heartbeat stale, probing before reconnect');
+        } else {
+          _staleProbeSent = false;
+          _log('[relay] heartbeat ack timeout, reconnecting');
+          _reconnect();
+          return;
+        }
+      } else {
+        _staleProbeSent = false;
+      }
+      _send({
+        'type': 'pair_status_query',
+        'device_sid': params.deviceSid,
+        'client_ts': DateTime.now().millisecondsSinceEpoch,
+      });
+    });
+  }
+
+  /// Probe immediately when the app returns from background. If no inbound
+  /// relay frame arrived for a while, skip backoff and rebuild the socket.
+  void poke() {
+    if (_disposed || _intentionallyClosed) return;
+    if (state == RelayState.paired) {
+      if (DateTime.now().difference(_lastInboundAt) > _deadLinkThreshold) {
+        _log('[relay] poke: stale inbound link, reconnecting');
         _reconnect();
         return;
       }
@@ -305,7 +354,11 @@ class RelayClient {
         'device_sid': params.deviceSid,
         'client_ts': DateTime.now().millisecondsSinceEpoch,
       });
-    });
+    } else if (state == RelayState.reconnecting) {
+      _reconnectTimer?.cancel();
+      _reconnectTimer = null;
+      _connect();
+    }
   }
 
   void _stopHeartbeat() => _heartbeatTimer?.cancel();

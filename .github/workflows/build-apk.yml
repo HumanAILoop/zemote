@@ -14,10 +14,10 @@ jobs:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Set up Flutter
-        uses: subosito/flutter-action@v2
+        uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
         with:
           channel: stable
           cache: true
@@ -54,14 +54,24 @@ jobs:
       - name: Build APK (release)
         run: flutter build apk --release
 
-      - name: Upload APK to GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: build/app/outputs/flutter-apk/app-release.apk
-          name: ${{ github.ref_name }}
-          body: |
-            Zemote ${{ github.ref_name }}
+      - name: Generate APK checksum
+        run: |
+          cd build/app/outputs/flutter-apk
+          sha256sum app-release.apk > app-release.apk.sha256
 
-            > APK built automatically by GitHub Actions from tag `${{ github.ref_name }}`.
+      - name: Prepare release notes
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: .github/scripts/release-notes.ps1
+
+      - name: Upload APK to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
+        with:
+          files: |
+            build/app/outputs/flutter-apk/app-release.apk
+            build/app/outputs/flutter-apk/app-release.apk.sha256
+          name: ${{ github.ref_name }}
+          body_path: release-notes.md
           draft: false
           prerelease: false

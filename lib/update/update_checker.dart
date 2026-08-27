@@ -10,6 +10,7 @@ class UpdateInfo {
   final String releaseUrl;
   final String? body;
   final String? apkUrl;
+  final String? checksumUrl;
   final bool isNewer;
 
   const UpdateInfo({
@@ -17,6 +18,7 @@ class UpdateInfo {
     required this.releaseUrl,
     this.body,
     this.apkUrl,
+    this.checksumUrl,
     required this.isNewer,
   });
 }
@@ -45,14 +47,17 @@ Future<UpdateInfo> checkForUpdates({
   final body = data['body'] as String?;
   final assets = data['assets'];
   String? apkUrl;
+  String? checksumUrl;
   if (assets is List) {
     for (final a in assets.whereType<Map>()) {
       if ('${a['name'] ?? ''}'.endsWith('.apk')) {
         final url = '${a['browser_download_url'] ?? ''}';
         if (url.isNotEmpty) {
           apkUrl = url;
-          break;
         }
+      } else if ('${a['name'] ?? ''}'.endsWith('.sha256')) {
+        final url = '${a['browser_download_url'] ?? ''}';
+        if (url.isNotEmpty) checksumUrl = url;
       }
     }
   }
@@ -61,9 +66,14 @@ Future<UpdateInfo> checkForUpdates({
     releaseUrl: releaseUrl,
     body: body,
     apkUrl: apkUrl,
+    checksumUrl: checksumUrl,
     isNewer: version.isNotEmpty &&
         compareVersions(version, currentVersion) > 0,
   );
+}
+
+String? parseChecksumHex(String content) {
+  return RegExp(r'\b[0-9a-fA-F]{64}\b').firstMatch(content)?.group(0)?.toLowerCase();
 }
 
 class UpdateCheckException implements Exception {
