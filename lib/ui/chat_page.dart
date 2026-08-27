@@ -85,6 +85,7 @@ class _ChatPageState extends State<ChatPage> {
       });
     }
   }
+
   bool _loadingOlder = false;
   bool _showSlash = false;
   String? _progress;
@@ -192,8 +193,7 @@ class _ChatPageState extends State<ChatPage> {
       final max = _scrollController.position.maxScrollExtent;
       // Snap to the newest message on open; afterwards only follow while the
       // user is already near the bottom (so reading history isn't yanked).
-      if (_stickToBottom ||
-          _scrollController.position.pixels > max - 400) {
+      if (_stickToBottom || _scrollController.position.pixels > max - 400) {
         _scrollController.animateTo(
           max,
           duration: const Duration(milliseconds: 200),
@@ -283,14 +283,15 @@ class _ChatPageState extends State<ChatPage> {
 
   Future<void> _pickFiles() async {
     try {
-      final result = await FilePicker.pickFiles(
-          withData: true, allowMultiple: true);
-      if (result == null) return;      setState(() {
+      final result =
+          await FilePicker.pickFiles(withData: true, allowMultiple: true);
+      if (result == null) return;
+      setState(() {
         for (final file in result.files) {
           final bytes = file.bytes;
           if (bytes == null) continue;
-          _pendingFiles.add(
-              _PendingFile(file.name, _guessMime(file.name), bytes));
+          _pendingFiles
+              .add(_PendingFile(file.name, _guessMime(file.name), bytes));
         }
       });
     } catch (e) {
@@ -332,15 +333,13 @@ class _ChatPageState extends State<ChatPage> {
     if (text == '/goal pause') {
       _inputController.clear();
       setState(() => _showSlash = false);
-      await _run('暂停目标失败',
-          () => _transport.pauseGoal(_requireSession()));
+      await _run('暂停目标失败', () => _transport.pauseGoal(_requireSession()));
       return;
     }
     if (text == '/goal resume') {
       _inputController.clear();
       setState(() => _showSlash = false);
-      await _run('恢复目标失败',
-          () => _transport.resumeGoal(_requireSession()));
+      await _run('恢复目标失败', () => _transport.resumeGoal(_requireSession()));
       return;
     }
 
@@ -477,12 +476,15 @@ class _ChatPageState extends State<ChatPage> {
     try {
       final sessionId = _sessionId;
       if (sessionId == null) throw StateError('尚无会话');
-      final files = (echo['files'] as List?)?.whereType<_PendingFile>().toList() ??
-          const <_PendingFile>[];
-      List<Map<String, dynamic>>? attachments =
-          (echo['attachments'] as List?)?.whereType<Map>().map(
-                (item) => item.cast<String, dynamic>(),
-              ).toList();
+      final files =
+          (echo['files'] as List?)?.whereType<_PendingFile>().toList() ??
+              const <_PendingFile>[];
+      List<Map<String, dynamic>>? attachments = (echo['attachments'] as List?)
+          ?.whereType<Map>()
+          .map(
+            (item) => item.cast<String, dynamic>(),
+          )
+          .toList();
       if (files.isNotEmpty && attachments == null) {
         attachments = await _uploadFiles(files, sessionId);
         echo['attachments'] = attachments;
@@ -562,13 +564,11 @@ class _ChatPageState extends State<ChatPage> {
         content: const Text('立即发送将清空排队消息并插队执行'),
         actions: [
           TextButton(
-            onPressed: () =>
-                Navigator.pop(context, 'keepQueueAndSend'),
+            onPressed: () => Navigator.pop(context, 'keepQueueAndSend'),
             child: const Text('排队发送'),
           ),
           FilledButton(
-            onPressed: () =>
-                Navigator.pop(context, 'clearQueueAndSend'),
+            onPressed: () => Navigator.pop(context, 'clearQueueAndSend'),
             child: const Text('立即发送'),
           ),
         ],
@@ -612,8 +612,8 @@ class _ChatPageState extends State<ChatPage> {
             .whereType<Map>()
             .map((e) => e.cast<String, dynamic>())
             .toList()
-          ..sort((a, b) => ((a['rowId'] as num?) ?? 0)
-              .compareTo((b['rowId'] as num?) ?? 0));
+          ..sort((a, b) =>
+              ((a['rowId'] as num?) ?? 0).compareTo((b['rowId'] as num?) ?? 0));
         state.prependOlderRows(older, firstRowId);
         if (hasMore == false) state.historyExhausted = true;
         // Prepending shifts the content above; keep the newest message in
@@ -683,8 +683,8 @@ class _ChatPageState extends State<ChatPage> {
         loading: _skillsLoading,
         onSelect: (skill) {
           _inputController.text = '\$${skill.name} ';
-          _inputController.selection = TextSelection.collapsed(
-              offset: _inputController.text.length);
+          _inputController.selection =
+              TextSelection.collapsed(offset: _inputController.text.length);
           Navigator.of(context).pop();
           setState(() => _showSlash = false);
         },
@@ -742,8 +742,7 @@ class _ChatPageState extends State<ChatPage> {
                   [
                     if (state.phase.isNotEmpty) state.phase,
                     state.currentModel,
-                    if (state.currentThought.isNotEmpty)
-                      state.currentThought,
+                    if (state.currentThought.isNotEmpty) state.currentThought,
                   ].where((s) => s.isNotEmpty).join(' · '),
                   style: TextStyle(fontSize: 11, color: ZInk.faint(context)),
                 ),
@@ -780,8 +779,7 @@ class _ChatPageState extends State<ChatPage> {
               onSelected: (action) {
                 switch (action) {
                   case 'compact':
-                    _run('压缩失败',
-                        () => _transport.compact(_sessionId!));
+                    _run('压缩失败', () => _transport.compact(_sessionId!));
                   case 'usage':
                     _showUsageSheet();
                   case 'plans':
@@ -789,11 +787,8 @@ class _ChatPageState extends State<ChatPage> {
                 }
               },
               itemBuilder: (context) => const [
-                PopupMenuItem(
-                    value: 'compact',
-                    child: Text('压缩上下文 (compact)')),
-                PopupMenuItem(
-                    value: 'usage', child: Text('用量统计')),
+                PopupMenuItem(value: 'compact', child: Text('压缩上下文 (compact)')),
+                PopupMenuItem(value: 'usage', child: Text('用量统计')),
                 PopupMenuItem(value: 'plans', child: Text('计划')),
               ],
             ),
@@ -806,10 +801,10 @@ class _ChatPageState extends State<ChatPage> {
               color: ZColors.danger.withValues(alpha: 0.15),
               child: ListTile(
                 dense: true,
-                title: Text('订阅失败: $_error',
-                    style: const TextStyle(fontSize: 12)),
-                trailing: TextButton(
-                    onPressed: _subscribe, child: const Text('重试')),
+                title:
+                    Text('订阅失败: $_error', style: const TextStyle(fontSize: 12)),
+                trailing:
+                    TextButton(onPressed: _subscribe, child: const Text('重试')),
               ),
             ),
           if (state != null)
@@ -844,26 +839,22 @@ class _ChatPageState extends State<ChatPage> {
                           }
                           return ListView.builder(
                             controller: _scrollController,
-                            padding:
-                                const EdgeInsets.fromLTRB(14, 14, 14, 8),
+                            padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
                             itemCount: itemCount,
                             itemBuilder: (context, index) {
                               if (state.canLoadOlder && index == 0) {
                                 return Center(
                                   child: TextButton.icon(
-                                    onPressed: _loadingOlder
-                                        ? null
-                                        : _loadOlder,
+                                    onPressed:
+                                        _loadingOlder ? null : _loadOlder,
                                     icon: _loadingOlder
                                         ? const SizedBox(
                                             width: 12,
                                             height: 12,
-                                            child:
-                                                CircularProgressIndicator(
-                                                    strokeWidth: 1.5),
+                                            child: CircularProgressIndicator(
+                                                strokeWidth: 1.5),
                                           )
-                                        : const Icon(Icons.history,
-                                            size: 14),
+                                        : const Icon(Icons.history, size: 14),
                                     label: const Text('加载更早消息',
                                         style: TextStyle(fontSize: 12)),
                                   ),
@@ -911,8 +902,7 @@ class _ChatPageState extends State<ChatPage> {
                   _GoalBanner(state: state),
                   _BackgroundWorksBar(state: state),
                   _QueueBar(state: state, transport: _transport),
-                  _PendingInteractions(
-                      state: state, transport: _transport),
+                  _PendingInteractions(state: state, transport: _transport),
                 ],
               ),
             ),
@@ -944,8 +934,8 @@ class _ChatPageState extends State<ChatPage> {
                   ),
                   const SizedBox(width: 8),
                   Text(_progress!,
-                      style: TextStyle(
-                          fontSize: 11, color: ZInk.muted(context))),
+                      style:
+                          TextStyle(fontSize: 11, color: ZInk.muted(context))),
                 ],
               ),
             ),
@@ -953,8 +943,7 @@ class _ChatPageState extends State<ChatPage> {
             _PendingFilesBar(
               files: _pendingFiles,
               uploadProgress: _uploadProgress,
-              onRemove: (i) =>
-                  setState(() => _pendingFiles.removeAt(i)),
+              onRemove: (i) => setState(() => _pendingFiles.removeAt(i)),
             ),
           _InputBar(
             controller: _inputController,
@@ -998,8 +987,7 @@ class _ReconnectBanner extends StatelessWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text('连接已断开，正在自动重连…',
-                    style: TextStyle(
-                        fontSize: 12, color: ZInk.soft(context))),
+                    style: TextStyle(fontSize: 12, color: ZInk.soft(context))),
               ),
             ],
           ),
@@ -1040,8 +1028,8 @@ AssistantTurnParts assistantTurnParts(List<Map<String, dynamic>> rows) {
     if (template != null) {
       final text = buf!.toString().trim();
       if (text.isNotEmpty) {
-        parts.add((kind: 'text', text: text, row: template,
-            streaming: anyStream));
+        parts.add(
+            (kind: 'text', text: text, row: template, streaming: anyStream));
       }
       buf = null;
       template = null;
@@ -1080,8 +1068,7 @@ AssistantTurnParts assistantTurnParts(List<Map<String, dynamic>> rows) {
 /// after one). Consecutive assistant rows are merged into a single group
 /// EVEN IF the server bumps `turnId` mid-response, so one answer never
 /// splits into several bubbles each carrying its own feedback buttons.
-List<List<Map<String, dynamic>>> _groupRows(
-    List<Map<String, dynamic>> rows) {
+List<List<Map<String, dynamic>>> _groupRows(List<Map<String, dynamic>> rows) {
   final groups = <List<Map<String, dynamic>>>[];
   List<Map<String, dynamic>>? current;
   for (final row in rows) {
@@ -1092,9 +1079,8 @@ List<List<Map<String, dynamic>>> _groupRows(
       continue;
     }
     final isUser = kind == 'userInput';
-    final startsGroup = isUser ||
-        current == null ||
-        current.first['kind'] == 'userInput';
+    final startsGroup =
+        isUser || current == null || current.first['kind'] == 'userInput';
     if (startsGroup) {
       current = [row];
       groups.add(current);
@@ -1240,8 +1226,7 @@ class _RowWidget extends StatelessWidget {
               title: const Text('重试本轮 (retryTurn)'),
               onTap: () {
                 Navigator.pop(context);
-                onAction('重试失败',
-                    () => transport.retryTurn(sessionId, _target));
+                onAction('重试失败', () => transport.retryTurn(sessionId, _target));
               },
             ),
             ListTile(
@@ -1249,8 +1234,8 @@ class _RowWidget extends StatelessWidget {
               title: const Text('分叉对话 (fork)'),
               onTap: () {
                 Navigator.pop(context);
-                onAction('分叉失败',
-                    () => transport.forkAssistant(sessionId, _target));
+                onAction(
+                    '分叉失败', () => transport.forkAssistant(sessionId, _target));
               },
             ),
             ListTile(
@@ -1289,19 +1274,17 @@ class _RowWidget extends StatelessWidget {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('取消')),
+              onPressed: () => Navigator.pop(context), child: const Text('取消')),
           FilledButton(
-              onPressed: () =>
-                  Navigator.pop(context, controller.text.trim()),
+              onPressed: () => Navigator.pop(context, controller.text.trim()),
               child: const Text('重发')),
         ],
       ),
     );
     controller.dispose();
     if (text == null || text.isEmpty) return;
-    await onAction('编辑失败',
-        () => transport.editUserQuery(sessionId, _target, text));
+    await onAction(
+        '编辑失败', () => transport.editUserQuery(sessionId, _target, text));
   }
 
   Future<void> _confirmRewind(BuildContext context) async {
@@ -1322,8 +1305,7 @@ class _RowWidget extends StatelessWidget {
       ),
     );
     if (confirmed != true) return;
-    await onAction('回滚失败',
-        () => transport.applyFileRewind(sessionId, _target));
+    await onAction('回滚失败', () => transport.applyFileRewind(sessionId, _target));
   }
 
   Future<void> _showFileChanges(BuildContext context) async {
@@ -1348,11 +1330,14 @@ class _RowWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final widget_ = switch (row['kind']) {
-      'userInput' => _UserBubble(row: row, transport: transport,
-          sessionId: sessionId),
+      'userInput' =>
+        _UserBubble(row: row, transport: transport, sessionId: sessionId),
       'assistantText' => _AssistantBubble(
-          row: row, transport: transport, sessionId: sessionId,
-          state: state, showFeedback: showFeedback),
+          row: row,
+          transport: transport,
+          sessionId: sessionId,
+          state: state,
+          showFeedback: showFeedback),
       'reasoning' => _ReasoningTile(
           text: row['text'] as String? ?? '',
           streaming: row['state'] == 'streaming'),
@@ -1417,14 +1402,15 @@ class _UserBubble extends StatelessWidget {
                   ),
             if (text.isNotEmpty)
               SelectableText(text,
-                  style: const TextStyle(fontSize: 14, height: 1.5)),
+                  style: TextStyle(
+                      fontSize: 14, height: 1.5, color: ZInk.solid(context))),
             if (badge != null)
               Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(badge!,
-                      style: TextStyle(
-                          fontSize: 10, color: ZInk.faint(context))),
+                      style:
+                          TextStyle(fontSize: 10, color: ZInk.faint(context))),
                   if (onRetry != null)
                     TextButton(
                       onPressed: onRetry,
@@ -1475,8 +1461,8 @@ class _AttachmentViewState extends State<_AttachmentView> {
     final ref = widget.attachment['ref'] as String?;
     if (ref == null) return;
     try {
-      final res = await widget.transport
-          .attachmentRead(widget.sessionId, ref: ref);
+      final res =
+          await widget.transport.attachmentRead(widget.sessionId, ref: ref);
       if (mounted) setState(() => _imageBytes = res.bytes);
     } catch (_) {
       if (mounted) setState(() => _failed = true);
@@ -1599,8 +1585,8 @@ class _AssistantBubble extends StatelessWidget {
                   _FeedbackButton(
                     icon: Icons.thumb_down_alt_outlined,
                     active: feedback == 'dislike',
-                    onTap: () => _setFeedback(
-                        feedback == 'dislike' ? null : 'dislike'),
+                    onTap: () =>
+                        _setFeedback(feedback == 'dislike' ? null : 'dislike'),
                   ),
                 ],
               ],
@@ -1644,22 +1630,29 @@ class _ReasoningTile extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 4),
       decoration: BoxDecoration(
-        color: ZInk.tile(context),
+        color: ZInk.reasoningPanel(context),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: ZInk.tileBorder(context)),
+        border: Border.all(color: ZInk.reasoningBorder(context)),
       ),
       child: ExpansionTile(
+        initiallyExpanded: true,
         dense: true,
+        shape: const Border(),
+        collapsedShape: const Border(),
+        iconColor: ZColors.running,
+        collapsedIconColor: ZInk.muted(context),
         tilePadding: const EdgeInsets.symmetric(horizontal: 12),
         title: Row(
           children: [
             Icon(Icons.psychology_outlined,
-                size: 14,
-                color: streaming ? ZColors.running : ZInk.faint(context)),
+                size: 14, color: streaming ? ZColors.running : ZColors.primary),
             const SizedBox(width: 6),
             Text(
               streaming ? '思考中…' : '思考过程',
-              style: TextStyle(fontSize: 12, color: ZInk.muted(context)),
+              style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: ZInk.solid(context)),
             ),
           ],
         ),
@@ -1711,22 +1704,32 @@ class _ToolCallTile extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 3),
       decoration: BoxDecoration(
-        color: ZInk.tile(context),
+        color: ZInk.panel(context),
         borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: ZInk.panelBorder(context)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ExpansionTile(
+            initiallyExpanded: status == 'running' ||
+                status == 'inputStreaming' ||
+                status == 'pendingApproval',
             dense: true,
+            shape: const Border(),
+            collapsedShape: const Border(),
+            iconColor: color,
+            collapsedIconColor: ZInk.muted(context),
             tilePadding: const EdgeInsets.symmetric(horizontal: 12),
             leading: Icon(icon, size: 15, color: color),
             title: Text(toolName,
-                style: const TextStyle(
-                    fontSize: 12.5, fontFamily: 'monospace')),
-            subtitle: Text(status,
                 style: TextStyle(
-                    fontSize: 10.5, color: ZInk.faint(context))),
+                    fontSize: 12.5,
+                    fontFamily: 'monospace',
+                    fontWeight: FontWeight.w600,
+                    color: ZInk.solid(context))),
+            subtitle: Text(status,
+                style: TextStyle(fontSize: 10.5, color: ZInk.muted(context))),
             children: [
               if (inputText.isNotEmpty) _kv(context, '输入', inputText),
               if (outputText.isNotEmpty) _kv(context, '输出', outputText),
@@ -1748,11 +1751,10 @@ class _ToolCallTile extends StatelessWidget {
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(8),
                   child: Image.memory(
-                     base64Decode(image['base64'] as String),
-                     cacheWidth: (MediaQuery.sizeOf(context).width * 2).round(),
-                     fit: BoxFit.contain,
-                    errorBuilder: (_, __, ___) =>
-                        const SizedBox.shrink(),
+                    base64Decode(image['base64'] as String),
+                    cacheWidth: (MediaQuery.sizeOf(context).width * 2).round(),
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const SizedBox.shrink(),
                   ),
                 ),
               ),
@@ -1774,8 +1776,7 @@ class _ToolCallTile extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(label,
-              style: TextStyle(
-                  fontSize: 10.5, color: ZInk.faint(context))),
+              style: TextStyle(fontSize: 10.5, color: ZInk.faint(context))),
           const SizedBox(height: 2),
           Container(
             width: double.infinity,
@@ -1789,7 +1790,8 @@ class _ToolCallTile extends StatelessWidget {
                   ? '${display.substring(0, 4000)}…'
                   : display,
               style: TextStyle(
-                  fontFamily: 'monospace', fontSize: 11,
+                  fontFamily: 'monospace',
+                  fontSize: 11,
                   color: ZInk.solid(context)),
             ),
           ),
@@ -1824,8 +1826,7 @@ class _ProgressRow extends StatelessWidget {
                 if (preview.isNotEmpty) preview,
                 '${(bytes / 1024).toStringAsFixed(1)} KB',
               ].join(' · '),
-              style: TextStyle(
-                  fontSize: 11, color: ZInk.faint(context)),
+              style: TextStyle(fontSize: 11, color: ZInk.faint(context)),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -1896,9 +1897,8 @@ class _TurnHeader extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 10),
             child: Text(
               label,
-              style: TextStyle(
-                  fontSize: 11,
-                  color: color.withValues(alpha: 0.9)),
+              style:
+                  TextStyle(fontSize: 11, color: color.withValues(alpha: 0.9)),
             ),
           ),
           const Expanded(child: Divider()),
@@ -1926,16 +1926,8 @@ class _TimelineMarkerWidget extends StatelessWidget {
               '${marker['tokensBefore'] != null ? ' · ${marker['tokensBefore']}→${marker['tokensAfter'] ?? '?'} tokens' : ''}',
           ZColors.primary
         ),
-      'forkNotice' => (
-          Icons.fork_right,
-          '从会话分叉而来',
-          ZInk.faint(context)
-        ),
-      'forkCreated' => (
-          Icons.fork_right,
-          '已创建分叉会话',
-          ZInk.faint(context)
-        ),
+      'forkNotice' => (Icons.fork_right, '从会话分叉而来', ZInk.faint(context)),
+      'forkCreated' => (Icons.fork_right, '已创建分叉会话', ZInk.faint(context)),
       'modelChange' => (
           Icons.swap_horiz,
           '模型切换 ${marker['fromModel'] ?? ''} → ${marker['toModel'] ?? ''}',
@@ -1956,19 +1948,14 @@ class _TimelineMarkerWidget extends StatelessWidget {
           '自动重试 第${marker['attempt'] ?? '?'}次 (${marker['reasonCode'] ?? ''})',
           ZColors.warning
         ),
-      'checkpointRestored' => (
-          Icons.restore,
-          '已恢复检查点',
-          ZInk.faint(context)
-        ),
+      'checkpointRestored' => (Icons.restore, '已恢复检查点', ZInk.faint(context)),
       _ => (Icons.info_outline, type, ZInk.faint(context)),
     };
 
     return Center(
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 6),
-        padding:
-            const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(20),
@@ -2018,10 +2005,8 @@ class _SubagentTile extends StatelessWidget {
               children: [
                 Text('子代理 · ${row['subagentType'] ?? ''}',
                     style: const TextStyle(fontSize: 12)),
-                Text(
-                    '${row['status'] ?? ''}  ${row['summaryText'] ?? ''}',
-                    style: TextStyle(
-                        fontSize: 11, color: ZInk.faint(context)),
+                Text('${row['status'] ?? ''}  ${row['summaryText'] ?? ''}',
+                    style: TextStyle(fontSize: 11, color: ZInk.faint(context)),
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis),
               ],
@@ -2051,10 +2036,8 @@ class _ContextUsageBar extends StatelessWidget {
       return const SizedBox.shrink();
     }
     final ratio = (used / max).clamp(0.0, 1.0);
-    final color =
-        ratio > 0.8 ? ZColors.warning : ZColors.primary;
-    String fmt(int v) =>
-        v >= 1000 ? '${(v / 1000).toStringAsFixed(1)}k' : '$v';
+    final color = ratio > 0.8 ? ZColors.warning : ZColors.primary;
+    String fmt(int v) => v >= 1000 ? '${(v / 1000).toStringAsFixed(1)}k' : '$v';
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
       child: Row(
@@ -2099,27 +2082,23 @@ class _GoalBanner extends StatelessWidget {
       decoration: BoxDecoration(
         color: ZColors.success.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(12),
-        border:
-            Border.all(color: ZColors.success.withValues(alpha: 0.25)),
+        border: Border.all(color: ZColors.success.withValues(alpha: 0.25)),
       ),
       child: Row(
         children: [
-          const Icon(Icons.flag_outlined,
-              size: 14, color: ZColors.success),
+          const Icon(Icons.flag_outlined, size: 14, color: ZColors.success),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               objective,
-              style:
-                  TextStyle(fontSize: 12, color: ZInk.soft(context)),
+              style: TextStyle(fontSize: 12, color: ZInk.soft(context)),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
           ),
           if (status.isNotEmpty)
             Text(status,
-                style: const TextStyle(
-                    fontSize: 11, color: ZColors.success)),
+                style: const TextStyle(fontSize: 11, color: ZColors.success)),
         ],
       ),
     );
@@ -2156,8 +2135,7 @@ class _BackgroundWorksBar extends StatelessWidget {
             child: Text(
               '后台任务 ${works.length} 个运行中: '
               '${works.map((w) => w['title'] ?? w['kind']).join('、')}',
-              style:
-                  TextStyle(fontSize: 11.5, color: ZInk.soft(context)),
+              style: TextStyle(fontSize: 11.5, color: ZInk.soft(context)),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -2185,8 +2163,7 @@ class _QueueBar extends StatelessWidget {
       decoration: BoxDecoration(
         color: ZColors.primary.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(12),
-        border:
-            Border.all(color: ZColors.primary.withValues(alpha: 0.25)),
+        border: Border.all(color: ZColors.primary.withValues(alpha: 0.25)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2197,8 +2174,7 @@ class _QueueBar extends StatelessWidget {
                   size: 14, color: ZColors.primary),
               const SizedBox(width: 6),
               Text('排队消息 ${items.length}',
-                  style: const TextStyle(
-                      fontSize: 12, color: ZColors.primary)),
+                  style: const TextStyle(fontSize: 12, color: ZColors.primary)),
               const Spacer(),
               InkWell(
                 onTap: () {
@@ -2210,8 +2186,7 @@ class _QueueBar extends StatelessWidget {
                 },
                 child: Text(
                   state.autoDrain ? '自动发送: 开' : '自动发送: 关',
-                  style: TextStyle(
-                      fontSize: 11, color: ZInk.muted(context)),
+                  style: TextStyle(fontSize: 11, color: ZInk.muted(context)),
                 ),
               ),
             ],
@@ -2225,8 +2200,7 @@ class _QueueBar extends StatelessWidget {
                   Expanded(
                     child: Text(
                       '${item['text'] ?? ''}',
-                      style: TextStyle(
-                          fontSize: 12, color: ZInk.soft(context)),
+                      style: TextStyle(fontSize: 12, color: ZInk.soft(context)),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
@@ -2254,20 +2228,16 @@ class _QueueBar extends StatelessWidget {
                         context: context,
                         builder: (context) => AlertDialog(
                           title: const Text('删除排队消息？'),
-                          content: Text(
-                              '将删除「${item['text'] ?? ''}」',
-                              maxLines: 3,
-                              overflow: TextOverflow.ellipsis),
+                          content: Text('将删除「${item['text'] ?? ''}」',
+                              maxLines: 3, overflow: TextOverflow.ellipsis),
                           actions: [
                             TextButton(
-                                onPressed: () =>
-                                    Navigator.pop(context, false),
+                                onPressed: () => Navigator.pop(context, false),
                                 child: const Text('取消')),
                             FilledButton(
                               style: FilledButton.styleFrom(
                                   backgroundColor: ZColors.danger),
-                              onPressed: () =>
-                                  Navigator.pop(context, true),
+                              onPressed: () => Navigator.pop(context, true),
                               child: const Text('删除'),
                             ),
                           ],
@@ -2286,10 +2256,9 @@ class _QueueBar extends StatelessWidget {
     );
   }
 
-  Future<void> _edit(BuildContext context, String sessionId,
-      Map<String, dynamic> item) async {
-    final controller =
-        TextEditingController(text: '${item['text'] ?? ''}');
+  Future<void> _edit(
+      BuildContext context, String sessionId, Map<String, dynamic> item) async {
+    final controller = TextEditingController(text: '${item['text'] ?? ''}');
     final text = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
@@ -2301,11 +2270,9 @@ class _QueueBar extends StatelessWidget {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('取消')),
+              onPressed: () => Navigator.pop(context), child: const Text('取消')),
           FilledButton(
-              onPressed: () =>
-                  Navigator.pop(context, controller.text.trim()),
+              onPressed: () => Navigator.pop(context, controller.text.trim()),
               child: const Text('保存')),
         ],
       ),
@@ -2326,8 +2293,7 @@ class _QueueBar extends StatelessWidget {
         'queue': {...q, 'items': items},
       });
     }
-    await transport.editQueueItem(
-        sessionId, '${item['queueItemId']}', text);
+    await transport.editQueueItem(sessionId, '${item['queueItemId']}', text);
   }
 }
 
@@ -2489,9 +2455,8 @@ class _InteractionCardState extends State<_InteractionCard> {
     final questions = payload['questions'];
     final freeText = payload['freeText'] == true;
 
-    final title = kind == 'permission'
-        ? '权限请求 · ${payload['toolName'] ?? ''}'
-        : '等待你的输入';
+    final title =
+        kind == 'permission' ? '权限请求 · ${payload['toolName'] ?? ''}' : '等待你的输入';
 
     return Container(
       margin: const EdgeInsets.fromLTRB(14, 4, 14, 0),
@@ -2499,8 +2464,7 @@ class _InteractionCardState extends State<_InteractionCard> {
       decoration: BoxDecoration(
         color: ZColors.warning.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(12),
-        border:
-            Border.all(color: ZColors.warning.withValues(alpha: 0.35)),
+        border: Border.all(color: ZColors.warning.withValues(alpha: 0.35)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2523,15 +2487,13 @@ class _InteractionCardState extends State<_InteractionCard> {
             Padding(
               padding: const EdgeInsets.only(top: 6),
               child: Text('${payload['prompt']}',
-                  style: TextStyle(
-                      fontSize: 12, color: ZInk.soft(context))),
+                  style: TextStyle(fontSize: 12, color: ZInk.soft(context))),
             ),
           if (kind == 'permission' && payload['summary'] != null)
             Padding(
               padding: const EdgeInsets.only(top: 6),
               child: Text('${payload['summary']}',
-                  style: TextStyle(
-                      fontSize: 12, color: ZInk.soft(context))),
+                  style: TextStyle(fontSize: 12, color: ZInk.soft(context))),
             ),
           const SizedBox(height: 8),
           if (options is List && options.isNotEmpty)
@@ -2547,13 +2509,11 @@ class _InteractionCardState extends State<_InteractionCard> {
                             horizontal: 12, vertical: 6),
                         minimumSize: Size.zero,
                       ),
-                       onPressed: _busy
-                           ? null
-                           : () => kind == 'permission'
-                               ? _resolve(
-                                   optionId: '${option['optionId']}')
-                               : _resolve(
-                                   action: 'accept', content: {}),
+                      onPressed: _busy
+                          ? null
+                          : () => kind == 'permission'
+                              ? _resolve(optionId: '${option['optionId']}')
+                              : _resolve(action: 'accept', content: {}),
                       child: Text(
                         _optionLabel(option),
                         style: const TextStyle(fontSize: 12),
@@ -2588,8 +2548,8 @@ class _InteractionCardState extends State<_InteractionCard> {
                   icon: const Icon(Icons.send, size: 18),
                   onPressed: _busy
                       ? null
-                      : () => _resolve(
-                          freeText: _freeTextController.text.trim()),
+                      : () =>
+                          _resolve(freeText: _freeTextController.text.trim()),
                 ),
               ],
             ),
@@ -2642,7 +2602,8 @@ class _QuestionsViewState extends State<_QuestionsView> {
             index: i,
             question: widget.questions[i],
             busy: widget.busy,
-            selected: _answers['${widget.questions[i]['question']}'] ?? const [],
+            selected:
+                _answers['${widget.questions[i]['question']}'] ?? const [],
             onChanged: (selected) => setState(() {
               final key = '${widget.questions[i]['question']}';
               if (selected.isEmpty) {
@@ -2703,8 +2664,7 @@ class _QuestionItemState extends State<_QuestionItem> {
             Padding(
               padding: const EdgeInsets.only(top: 2),
               child: Text('${q['description']}',
-                  style: TextStyle(
-                      fontSize: 11, color: ZInk.faint(context))),
+                  style: TextStyle(fontSize: 11, color: ZInk.faint(context))),
             ),
           if (options is List && options.isNotEmpty)
             Padding(
@@ -2718,26 +2678,26 @@ class _QuestionItemState extends State<_QuestionItem> {
                       FilterChip(
                         label: Text('${o['label'] ?? o['value'] ?? ''}',
                             style: const TextStyle(fontSize: 12)),
-                         selected: widget.selected.contains('${o['value']}'),
+                        selected: widget.selected.contains('${o['value']}'),
                         onSelected: widget.busy
                             ? null
                             : (on) {
                                 setState(() {
-                                   final selected = List<String>.from(
-                                       widget.selected);
-                                   if (multi) {
-                                     if (on) {
-                                       selected.add('${o['value']}');
-                                     } else {
-                                       selected.remove('${o['value']}');
-                                     }
-                                   } else {
-                                     selected
-                                       ..clear()
-                                       ..add('${o['value']}');
-                                   }
-                                   widget.onChanged(selected);
-                                 });
+                                  final selected =
+                                      List<String>.from(widget.selected);
+                                  if (multi) {
+                                    if (on) {
+                                      selected.add('${o['value']}');
+                                    } else {
+                                      selected.remove('${o['value']}');
+                                    }
+                                  } else {
+                                    selected
+                                      ..clear()
+                                      ..add('${o['value']}');
+                                  }
+                                  widget.onChanged(selected);
+                                });
                               },
                       ),
                 ],
@@ -2801,12 +2761,10 @@ class _ModelModeSheet extends StatelessWidget {
         '${config['provider'] ?? ''}/${config['model'] ?? ''}';
     final currentModelValue =
         _isDraft || config['model'] == null || '${config['model']}'.isEmpty
-            ? (draftConfig?['model'] ??
-                '${modelOption?.currentValue ?? ''}')
+            ? (draftConfig?['model'] ?? '${modelOption?.currentValue ?? ''}')
             : liveModelValue;
     final currentThoughtValue = _isDraft
-        ? (draftConfig?['thought'] ??
-            '${thoughtOption?.currentValue ?? ''}')
+        ? (draftConfig?['thought'] ?? '${thoughtOption?.currentValue ?? ''}')
         : (state?.currentThought.isNotEmpty == true
             ? state!.currentThought
             : '${thoughtOption?.currentValue ?? ''}');
@@ -2822,12 +2780,11 @@ class _ModelModeSheet extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(_isDraft ? '新会话 · 模型与模式' : '模型与模式',
-                style: const TextStyle(
-                    fontSize: 16, fontWeight: FontWeight.w600)),
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             const SizedBox(height: 16),
             if (modelOption != null && modelOption.options.isNotEmpty) ...[
-              Text(modelOption.name,
-                  style: const TextStyle(fontSize: 13)),
+              Text(modelOption.name, style: const TextStyle(fontSize: 13)),
               const SizedBox(height: 8),
               for (final v in modelOption.options)
                 ListTile(
@@ -2842,8 +2799,7 @@ class _ModelModeSheet extends StatelessWidget {
                         ? ZColors.primary
                         : ZInk.ghost(context),
                   ),
-                  title: Text(v.name,
-                      style: const TextStyle(fontSize: 13)),
+                  title: Text(v.name, style: const TextStyle(fontSize: 13)),
                   subtitle: v.modelProviderName != null
                       ? Text(v.modelProviderName!,
                           style: TextStyle(
@@ -2853,17 +2809,15 @@ class _ModelModeSheet extends StatelessWidget {
                     if (_isDraft) {
                       onDraftChange?.call('model', v.value);
                     } else {
-                      final (provider, model) =
-                          _splitModelValue(v.value);
+                      final (provider, model) = _splitModelValue(v.value);
                       // thought must be valid for the target model:
                       // keep current if supported, else fall back to the
                       // thought option's currentValue (Turbo: enabled/off)
-                      final currentThought =
-                          state?.currentThought ?? '';
+                      final currentThought = state?.currentThought ?? '';
                       final thoughtOpt = prep?.option('thought_level');
                       final thought = currentThought.isNotEmpty &&
-                              (thoughtOpt?.options.any(
-                                      (o) => o.value == currentThought) ??
+                              (thoughtOpt?.options
+                                      .any((o) => o.value == currentThought) ??
                                   false)
                           ? currentThought
                           : '${thoughtOpt?.currentValue ?? (currentThought.isNotEmpty ? currentThought : 'enabled')}';
@@ -2890,12 +2844,9 @@ class _ModelModeSheet extends StatelessWidget {
               const SizedBox(height: 12),
             ] else
               Text('当前模型: ${state?.currentModel ?? ''}',
-                  style: TextStyle(
-                      fontSize: 12, color: ZInk.muted(context))),
-            if (thoughtOption != null &&
-                thoughtOption.options.isNotEmpty) ...[
-              Text(thoughtOption.name,
-                  style: const TextStyle(fontSize: 13)),
+                  style: TextStyle(fontSize: 12, color: ZInk.muted(context))),
+            if (thoughtOption != null && thoughtOption.options.isNotEmpty) ...[
+              Text(thoughtOption.name, style: const TextStyle(fontSize: 13)),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 8,
@@ -2910,13 +2861,12 @@ class _ModelModeSheet extends StatelessWidget {
                           onDraftChange?.call('thought', v.value);
                         } else {
                           final modelValue = currentModelValue;
-                          final (provider, model) =
-                              modelValue.isNotEmpty
-                                  ? _splitModelValue(modelValue)
-                                  : (
-                                      '${config['provider'] ?? ''}',
-                                      '${config['model'] ?? ''}'
-                                    );
+                          final (provider, model) = modelValue.isNotEmpty
+                              ? _splitModelValue(modelValue)
+                              : (
+                                  '${config['provider'] ?? ''}',
+                                  '${config['model'] ?? ''}'
+                                );
                           _apply(
                             context,
                             () => transport.switchModelConfig(
@@ -2977,8 +2927,7 @@ class _ModelModeSheet extends StatelessWidget {
                         ? ZColors.primary
                         : ZInk.ghost(context),
                   ),
-                  title: Text(v.name,
-                      style: const TextStyle(fontSize: 13)),
+                  title: Text(v.name, style: const TextStyle(fontSize: 13)),
                   subtitle: v.description != null
                       ? Text(v.description!,
                           style: TextStyle(
@@ -2990,8 +2939,7 @@ class _ModelModeSheet extends StatelessWidget {
                     } else {
                       _apply(
                         context,
-                        () => transport.switchCollaborationMode(
-                            sid, v.value),
+                        () => transport.switchCollaborationMode(sid, v.value),
                         onAccepted: () => state?.optimisticPatch({
                           'config': {
                             ...?state!.config,
@@ -3016,8 +2964,7 @@ class _ModelModeSheet extends StatelessWidget {
                         } else {
                           _apply(
                             context,
-                            () => transport.switchCollaborationMode(
-                                sid, m),
+                            () => transport.switchCollaborationMode(sid, m),
                           );
                         }
                       },
@@ -3031,21 +2978,21 @@ class _ModelModeSheet extends StatelessWidget {
               Wrap(
                 spacing: 8,
                 children: [
-                for (final f in const ['queue', 'guide'])
-                  ChoiceChip(
-                    label: Text(f == 'queue' ? '排队' : '引导'),
-                    selected: followup == f,
-                    onSelected: (_) => _apply(
-                      context,
-                      () => transport.setFollowupMode(sid, f),
-                      onAccepted: () => state?.optimisticPatch({
-                        'config': {
-                          ...?state!.config,
-                          'followupMode': f,
-                        },
-                      }),
+                  for (final f in const ['queue', 'guide'])
+                    ChoiceChip(
+                      label: Text(f == 'queue' ? '排队' : '引导'),
+                      selected: followup == f,
+                      onSelected: (_) => _apply(
+                        context,
+                        () => transport.setFollowupMode(sid, f),
+                        onAccepted: () => state?.optimisticPatch({
+                          'config': {
+                            ...?state!.config,
+                            'followupMode': f,
+                          },
+                        }),
+                      ),
                     ),
-                  ),
                 ],
               ),
             ],
@@ -3060,8 +3007,8 @@ class _ModelModeSheet extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Expanded(
-                        child: Text(o.name,
-                            style: const TextStyle(fontSize: 13)),
+                        child:
+                            Text(o.name, style: const TextStyle(fontSize: 13)),
                       ),
                       const SizedBox(width: 8),
                       Text('${o.currentValue}',
@@ -3089,8 +3036,7 @@ class _ModelModeSheet extends StatelessWidget {
             res['status'] != null &&
             res['status'] != 'accepted') {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-              content:
-                  Text('被拒绝: ${res['reasonCode'] ?? res['status']}')));
+              content: Text('被拒绝: ${res['reasonCode'] ?? res['status']}')));
         } else {
           onAccepted?.call();
           Navigator.pop(context);
@@ -3131,8 +3077,7 @@ class _UsageSheet extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text('用量统计',
-                style:
-                    TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             const SizedBox(height: 16),
             if (contextWindow is Map) ...[
               _UsageRow('上下文',
@@ -3141,10 +3086,8 @@ class _UsageSheet extends StatelessWidget {
             if (cumulative is Map) ...[
               _UsageRow('累计输入', '${cumulative['inputTokens'] ?? 0}'),
               _UsageRow('累计输出', '${cumulative['outputTokens'] ?? 0}'),
-              _UsageRow(
-                  '缓存读取', '${cumulative['cacheReadTokens'] ?? 0}'),
-              _UsageRow(
-                  '缓存写入', '${cumulative['cacheWriteTokens'] ?? 0}'),
+              _UsageRow('缓存读取', '${cumulative['cacheReadTokens'] ?? 0}'),
+              _UsageRow('缓存写入', '${cumulative['cacheWriteTokens'] ?? 0}'),
             ],
             const SizedBox(height: 12),
             SizedBox(
@@ -3170,8 +3113,8 @@ class _UsageSheet extends StatelessWidget {
                     }
                   } catch (e) {
                     if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('查询失败: $e')));
+                      ScaffoldMessenger.of(context)
+                          .showSnackBar(SnackBar(content: Text('查询失败: $e')));
                     }
                   }
                 },
@@ -3198,11 +3141,9 @@ class _UsageRow extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Text(label,
-              style:
-                  TextStyle(fontSize: 13, color: ZInk.muted(context))),
+              style: TextStyle(fontSize: 13, color: ZInk.muted(context))),
           Text(value,
-              style: const TextStyle(
-                  fontSize: 13, fontFamily: 'monospace')),
+              style: const TextStyle(fontSize: 13, fontFamily: 'monospace')),
         ],
       ),
     );
@@ -3226,15 +3167,14 @@ class _JsonSheet extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(title,
-                style: const TextStyle(
-                    fontSize: 16, fontWeight: FontWeight.w600)),
+                style:
+                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
             const SizedBox(height: 12),
             Flexible(
               child: SingleChildScrollView(
                 child: SelectableText(
                   data == null ? '（无数据）' : encoder.convert(data),
-                  style: const TextStyle(
-                      fontFamily: 'monospace', fontSize: 11),
+                  style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
                 ),
               ),
             ),
@@ -3301,8 +3241,7 @@ class _SlashCommandBar extends StatelessWidget {
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
-        border:
-            Border.all(color: Colors.white.withValues(alpha: 0.1)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
       ),
       child: ListView(
         shrinkWrap: true,
@@ -3313,22 +3252,17 @@ class _SlashCommandBar extends StatelessWidget {
               leading: Icon(
                 command.isSkill
                     ? Icons.auto_awesome_outlined
-                    : (command.name == 'compact'
-                        ? Icons.compress
-                        : Icons.bolt),
+                    : (command.name == 'compact' ? Icons.compress : Icons.bolt),
                 size: 16,
-                color: command.isSkill
-                    ? ZColors.warning
-                    : ZColors.primary,
+                color: command.isSkill ? ZColors.warning : ZColors.primary,
               ),
               title: Text(
-                command.isSkill ? '\$${command.name}' : '/${command.name}',
-                style: const TextStyle(
-                    fontSize: 13, fontFamily: 'monospace')),
+                  command.isSkill ? '\$${command.name}' : '/${command.name}',
+                  style:
+                      const TextStyle(fontSize: 13, fontFamily: 'monospace')),
               subtitle: Text(
                 command.description,
-                style: TextStyle(
-                    fontSize: 11, color: ZInk.faint(context)),
+                style: TextStyle(fontSize: 11, color: ZInk.faint(context)),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -3366,12 +3300,12 @@ class _SkillsPickerSheet extends StatelessWidget {
             Row(
               children: [
                 const Text('选择 Skills',
-                    style: TextStyle(
-                        fontSize: 16, fontWeight: FontWeight.w600)),
+                    style:
+                        TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                 const Spacer(),
                 IconButton(
-                  icon: Icon(Icons.refresh,
-                      size: 18, color: ZInk.muted(context)),
+                  icon:
+                      Icon(Icons.refresh, size: 18, color: ZInk.muted(context)),
                   tooltip: '刷新',
                   onPressed: onRefresh,
                 ),
@@ -3381,15 +3315,13 @@ class _SkillsPickerSheet extends StatelessWidget {
             if (loading)
               const Padding(
                 padding: EdgeInsets.all(16),
-                child:
-                    Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
               )
             else if (list.isEmpty)
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: Text('没有可用的 Skills',
-                    style: TextStyle(
-                        fontSize: 13, color: ZInk.muted(context))),
+                    style: TextStyle(fontSize: 13, color: ZInk.muted(context))),
               )
             else
               Flexible(
@@ -3407,8 +3339,7 @@ class _SkillsPickerSheet extends StatelessWidget {
                         subtitle: s.description != null
                             ? Text(s.description!,
                                 style: TextStyle(
-                                    fontSize: 12,
-                                    color: ZInk.faint(context)),
+                                    fontSize: 12, color: ZInk.faint(context)),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis)
                             : null,
@@ -3453,8 +3384,8 @@ class _InputBarState extends State<_InputBar> {
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             IconButton(
-              icon: Icon(Icons.attach_file,
-                  size: 20, color: ZInk.muted(context)),
+              icon:
+                  Icon(Icons.attach_file, size: 20, color: ZInk.muted(context)),
               tooltip: '添加附件',
               onPressed: widget.sending ? null : widget.onAttach,
             ),

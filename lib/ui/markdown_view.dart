@@ -25,16 +25,27 @@ class ZemoteMarkdown extends StatelessWidget {
     final codeFont =
         UiSettingsProvider.of(context)?.codeFontSize ?? fontSize - 1.5;
     final styleSheet = MarkdownStyleSheet(
-      p: TextStyle(
-          fontSize: fontSize, height: 1.6, color: ZInk.solid(context)),
-      h1: const TextStyle(
-          fontSize: 20, fontWeight: FontWeight.w700, height: 1.6),
-      h2: const TextStyle(
-          fontSize: 18, fontWeight: FontWeight.w700, height: 1.6),
-      h3: const TextStyle(
-          fontSize: 16, fontWeight: FontWeight.w600, height: 1.6),
-      h4: const TextStyle(
-          fontSize: 15, fontWeight: FontWeight.w600, height: 1.6),
+      p: TextStyle(fontSize: fontSize, height: 1.6, color: ZInk.solid(context)),
+      h1: TextStyle(
+          fontSize: 20,
+          fontWeight: FontWeight.w700,
+          height: 1.6,
+          color: ZInk.solid(context)),
+      h2: TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.w700,
+          height: 1.6,
+          color: ZInk.solid(context)),
+      h3: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w600,
+          height: 1.6,
+          color: ZInk.solid(context)),
+      h4: TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w600,
+          height: 1.6,
+          color: ZInk.solid(context)),
       code: TextStyle(
         fontFamily: 'monospace',
         fontSize: codeFont,
@@ -42,8 +53,8 @@ class ZemoteMarkdown extends StatelessWidget {
         color: ZInk.codeText(context),
       ),
       codeblockDecoration: const BoxDecoration(),
-      blockquote: TextStyle(
-          fontSize: fontSize, color: ZInk.soft(context), height: 1.6),
+      blockquote:
+          TextStyle(fontSize: fontSize, color: ZInk.soft(context), height: 1.6),
       blockquoteDecoration: BoxDecoration(
         border: Border(
           left: BorderSide(
@@ -51,22 +62,20 @@ class ZemoteMarkdown extends StatelessWidget {
         ),
       ),
       blockquotePadding: const EdgeInsets.only(left: 12),
-      listBullet: TextStyle(fontSize: fontSize, height: 1.6),
-      tableBody: TextStyle(fontSize: fontSize - 1),
+      listBullet: TextStyle(
+          fontSize: fontSize, height: 1.6, color: ZInk.solid(context)),
+      tableBody: TextStyle(fontSize: fontSize - 1, color: ZInk.solid(context)),
       tableHead: TextStyle(
-          fontSize: fontSize - 1, fontWeight: FontWeight.w600),
-      tableBorder: TableBorder.all(
-          color: ZInk.hairline(context), width: 1),
-      tableCellsPadding: const EdgeInsets.symmetric(
-          horizontal: 8, vertical: 4),
+          fontSize: fontSize - 1,
+          fontWeight: FontWeight.w600,
+          color: ZInk.solid(context)),
+      tableBorder: TableBorder.all(color: ZInk.hairline(context), width: 1),
+      tableCellsPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       horizontalRuleDecoration: BoxDecoration(
-        border: Border(
-            top: BorderSide(
-                color: ZInk.hairline(context))),
+        border: Border(top: BorderSide(color: ZInk.hairline(context))),
       ),
       a: const TextStyle(
-          color: ZColors.running,
-          decoration: TextDecoration.underline),
+          color: ZColors.running, decoration: TextDecoration.underline),
     );
 
     final body = MarkdownBody(
@@ -129,12 +138,11 @@ class _CodeBlock extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
               color: ZInk.tile(context),
-              borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(10)),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(10)),
             ),
             child: Row(
               children: [
@@ -169,9 +177,7 @@ class _CodeBlock extends StatelessWidget {
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.all(10),
             child: SelectableText(
-              code.endsWith('\n')
-                  ? code.substring(0, code.length - 1)
-                  : code,
+              code.endsWith('\n') ? code.substring(0, code.length - 1) : code,
               style: TextStyle(
                 fontFamily: 'monospace',
                 fontSize: fontSize - 1.5,

@@ -2,6 +2,13 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [0.4.4] - 2026-08-27
+
+### Fixed
+- 思考过程改为默认展开的高对比面板，浅色和深色主题下均使用明确背景、边框和可读文字。
+- 工具调用卡片提升背景与边框对比度，运行中的工具默认展开，输入/输出内容更易辨识。
+- Markdown 标题、列表和表格显式使用主题文字色，修复部分主题下文字与背景对比不足。
+
 ## [0.4.3] - 2026-08-27
 
 ### Fixed

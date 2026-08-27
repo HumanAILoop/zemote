@@ -92,34 +92,42 @@ class ZInk {
       _isLight(context) ? _slate300 : Colors.white12;
 
   /// Subtle tile fill (dark: white@4%, light: black@4%).
-  static Color tile(BuildContext context) =>
-      _isLight(context)
-          ? const Color(0x0A0F172A)
-          : Colors.white.withValues(alpha: 0.04);
+  static Color tile(BuildContext context) => _isLight(context)
+      ? const Color(0x0A0F172A)
+      : Colors.white.withValues(alpha: 0.04);
 
   /// Tile hairline border (dark: white@6%, light: black@6%).
-  static Color tileBorder(BuildContext context) =>
-      _isLight(context)
-          ? const Color(0x0F0F172A)
-          : Colors.white.withValues(alpha: 0.06);
+  static Color tileBorder(BuildContext context) => _isLight(context)
+      ? const Color(0x0F0F172A)
+      : Colors.white.withValues(alpha: 0.06);
+
+  /// High-contrast panel fill for reasoning/tool cards.
+  static Color panel(BuildContext context) =>
+      _isLight(context) ? const Color(0xFFE8EEF8) : const Color(0xFF17233D);
+
+  /// Visible panel outline in both themes.
+  static Color panelBorder(BuildContext context) =>
+      _isLight(context) ? const Color(0xFFB8C7DD) : const Color(0xFF344563);
+
+  /// Reasoning-specific fill, visually distinct from tool output.
+  static Color reasoningPanel(BuildContext context) =>
+      _isLight(context) ? const Color(0xFFE9F2FF) : const Color(0xFF132A46);
+
+  static Color reasoningBorder(BuildContext context) =>
+      _isLight(context) ? const Color(0xFF9DBCE2) : const Color(0xFF315A82);
 
   /// Code block background (light: slate-100 so code stays readable).
   static Color codeBlockBg(BuildContext context) =>
-      _isLight(context)
-          ? const Color(0xFFF1F5F9)
-          : Colors.black.withValues(alpha: 0.35);
+      _isLight(context) ? const Color(0xFFF1F5F9) : const Color(0xFF0B1220);
 
   /// Inline code background.
-  static Color codeInlineBg(BuildContext context) =>
-      _isLight(context)
-          ? const Color(0x140F172A)
-          : Colors.white.withValues(alpha: 0.08);
+  static Color codeInlineBg(BuildContext context) => _isLight(context)
+      ? const Color(0x140F172A)
+      : Colors.white.withValues(alpha: 0.08);
 
   /// Code text (light: dark blue for contrast on the light block).
   static Color codeText(BuildContext context) =>
-      _isLight(context)
-          ? const Color(0xFF1E3A8A)
-          : const Color(0xFF93C5FD);
+      _isLight(context) ? const Color(0xFF1E3A8A) : const Color(0xFF93C5FD);
 }
 
 ThemeData buildDarkTheme() {
@@ -161,8 +169,7 @@ ThemeData buildDarkTheme() {
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: ZColors.darkSurface,
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: ZColors.darkBorder),
@@ -252,8 +259,7 @@ ThemeData buildLightTheme() {
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: ZColors.lightSurface,
-      contentPadding:
-          const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: ZColors.lightBorder),
