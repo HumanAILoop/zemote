@@ -1,4 +1,4 @@
-﻿import 'dart:typed_data';
+import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 
@@ -8,87 +8,78 @@ import 'package:zemote/protocol/ipc_codec.dart';
 void main() {
   late List<Uint8List> sent;
 
-  /// Builds a minimal Initialize frame header: [resInitialize, 0]
   List<int> initHeader() {
-    final w = ValueWriter();
-    encodeValue(w, [ChannelClient.resInitialize, 0]);
-    return w.toBytes();
+    final writer = ValueWriter();
+    encodeValue(writer, [ChannelClient.resInitialize, 0]);
+    return writer.toBytes();
   }
 
-  /// Builds a promise-success frame: [resPromiseSuccess, id] + data value
   List<int> responseHeader(int id) {
-    final w = ValueWriter();
-    encodeValue(w, [ChannelClient.resPromiseSuccess, id]);
-    return w.toBytes();
+    final writer = ValueWriter();
+    encodeValue(writer, [ChannelClient.resPromiseSuccess, id]);
+    return writer.toBytes();
   }
 
-  /// Encodes a value and wraps in promise-success frame
   Uint8List successFrame(int id, Object? data) {
     final header = responseHeader(id);
-    final bodyW = ValueWriter();
-    encodeValue(bodyW, data);
-    final body = bodyW.toBytes();
-    return Uint8List.fromList([...header, ...body]);
+    final bodyWriter = ValueWriter();
+    encodeValue(bodyWriter, data);
+    return Uint8List.fromList([...header, ...bodyWriter.toBytes()]);
   }
 
-  setUp(() {
-    sent = [];
-  });
+  setUp(() => sent = []);
 
   test('initialize frame completes ready', () async {
-    final client = ChannelClient(sendBody: (b) => sent.add(b));
+    final client = ChannelClient(sendBody: sent.add);
     client.handleMessage(Uint8List.fromList(initHeader()));
 
     await expectLater(client.ready, completes);
     client.dispose();
   });
 
+  test('single-element initialize frame completes ready', () async {
+    final client = ChannelClient(sendBody: sent.add);
+    final writer = ValueWriter();
+    encodeValue(writer, [ChannelClient.resInitialize]);
+
+    client.handleMessage(writer.toBytes());
+
+    await expectLater(client.ready, completes);
+    client.dispose();
+  });
+
   test('call returns response data', () async {
-    final client = ChannelClient(sendBody: (b) => sent.add(b));
+    final client = ChannelClient(sendBody: sent.add);
     client.handleMessage(Uint8List.fromList(initHeader()));
 
     final future = client.call('zcode-task', 'listTasks', []);
-
-    // The request should have been sent after ready resolves
     await client.ready;
-    // Allow the microtask to fire the send
-    await Future.microtask(() {});
-    final callSent = sent.where((b) => b.isNotEmpty).toList();
-    expect(callSent, isNotEmpty);
+    await Future<void>.delayed(Duration.zero);
 
-    // Extract requestId from sent body
-    final reader =
-        ValueReader(callSent.isEmpty ? Uint8List(0) : callSent.last);
+    final reader = ValueReader(sent.last);
     final header = decodeValue(reader) as List;
     final id = header[1] as int;
-
-    // Feed response
     client.handleMessage(successFrame(id, {'result': 'ok'}));
 
-    final result = await future;
-    expect(result, {'result': 'ok'});
+    expect(await future, {'result': 'ok'});
     client.dispose();
   });
 
   test('call error returns ChannelRpcError', () async {
-    final client = ChannelClient(sendBody: (b) => sent.add(b));
+    final client = ChannelClient(sendBody: sent.add);
     client.handleMessage(Uint8List.fromList(initHeader()));
 
     final future = client.call('gold', 'validate', []);
     await client.ready;
-    await Future.microtask(() {});
+    await Future<void>.delayed(Duration.zero);
 
-    final callSent = sent.where((b) => b.isNotEmpty).toList();
-    final reader = ValueReader(callSent.last);
+    final reader = ValueReader(sent.last);
     final header = decodeValue(reader) as List;
     final id = header[1] as int;
-
-    // Feed resPromiseError
-    final errW = ValueWriter();
-    encodeValue(errW, [ChannelClient.resPromiseError, id]);
-    encodeValue(errW, {'message': 'bad request'});
-    final errBody = errW.toBytes();
-    client.handleMessage(errBody);
+    final writer = ValueWriter();
+    encodeValue(writer, [ChannelClient.resPromiseError, id]);
+    encodeValue(writer, {'message': 'bad request'});
+    client.handleMessage(writer.toBytes());
 
     expect(future, throwsA(isA<ChannelRpcError>()));
     client.dispose();
@@ -96,36 +87,37 @@ void main() {
 
   test('addEventListener fires on event', () async {
     final events = <dynamic>[];
-    final client = ChannelClient(sendBody: (b) => sent.add(b));
+    final client = ChannelClient(sendBody: sent.add);
     client.handleMessage(Uint8List.fromList(initHeader()));
 
-    client.addEventListener('zcode-agent', 'onDynamicConversationFrame',
-        (e) => events.add(e));
-
+    client.addEventListener(
+      'zcode-agent',
+      'onDynamicConversationFrame',
+      events.add,
+    );
     await client.ready;
-    await Future.microtask(() {});
+    await Future<void>.delayed(Duration.zero);
 
-    final listenSent = sent.where((b) => b.isNotEmpty).toList();
-    final reader = ValueReader(listenSent.last);
+    final reader = ValueReader(sent.last);
     final header = decodeValue(reader) as List;
     final id = header[1] as int;
+    final writer = ValueWriter();
+    encodeValue(writer, [ChannelClient.resEventFire, id]);
+    encodeValue(writer, {'frame': 'hello'});
+    client.handleMessage(writer.toBytes());
 
-    // Feed resEventFire
-    final fireW = ValueWriter();
-    encodeValue(fireW, [ChannelClient.resEventFire, id]);
-    encodeValue(fireW, {'frame': 'hello'});
-    client.handleMessage(fireW.toBytes());
-
-    expect(events, hasLength(1));
-    expect(events[0], {'frame': 'hello'});
+    expect(events, [
+      {'frame': 'hello'},
+    ]);
     client.dispose();
   });
 
   test('malformed header is ignored without throwing', () {
-    final client = ChannelClient(sendBody: (b) => sent.add(b));
-    final w = ValueWriter();
-    encodeValue(w, [ChannelClient.resPromiseSuccess]);
-    expect(() => client.handleMessage(w.toBytes()), returnsNormally);
+    final client = ChannelClient(sendBody: sent.add);
+    final writer = ValueWriter();
+    encodeValue(writer, [ChannelClient.resPromiseSuccess]);
+
+    expect(() => client.handleMessage(writer.toBytes()), returnsNormally);
     client.dispose();
   });
 }

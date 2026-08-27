@@ -89,6 +89,7 @@ class _TaskHomePageState extends State<TaskHomePage>
   final _searchController = TextEditingController();
 
   List<dynamic> _tasks = const [];
+  List<dynamic> _channelTasks = const [];
   List<dynamic> _pinned = const [];
   List<dynamic> _archived = const [];
   bool _loading = true;
@@ -140,7 +141,7 @@ class _TaskHomePageState extends State<TaskHomePage>
       if (tasks is! List) return;
       setState(() {
         final byId = <String, Map<String, dynamic>>{};
-        for (final t in _tasks) {
+        for (final t in _channelTasks) {
           if (t is Map && t['taskId'] != null) {
             byId['${t['taskId']}'] = (t).cast<String, dynamic>();
           }
@@ -149,11 +150,15 @@ class _TaskHomePageState extends State<TaskHomePage>
           if (t is! Map || t['taskId'] == null) continue;
           final id = '${t['taskId']}';
           final map = (t).cast<String, dynamic>();
-          // workspace-list-updated is global. It may contain tasks from
-          // another workspace, so it may only update ids already known by
-          // this page. New tasks arrive through the workspace-scoped
-          // sessions-index subscription.
-          if (!byId.containsKey(id)) continue;
+          final taskWorkspace =
+              map['workspaceIdentity'] ?? map['workspacePath'];
+          final currentWorkspace = widget.workspace['workspaceIdentity'] ??
+              widget.workspace['workspacePath'];
+          // Global updates may include other workspaces. Accept new ids only
+          // when the payload explicitly identifies this workspace.
+          if (!byId.containsKey(id) && taskWorkspace != currentWorkspace) {
+            continue;
+          }
           // Partition by the workspace-list flags: archived tasks belong
           // to the archived tab, never the active list.
           if (map['archived'] == true || map['deleted'] == true) {
@@ -164,12 +169,10 @@ class _TaskHomePageState extends State<TaskHomePage>
           _archivedIds.remove(id);
           byId[id] = {...?byId[id], ...map};
         }
-        final merged = byId.values
+        _channelTasks = byId.values
             .where((t) => !_isRecentlyRemoved('${t['taskId']}'))
-            .toList()
-          ..sort((a, b) => ((b['updatedAt'] as num?) ?? 0)
-              .compareTo((a['updatedAt'] as num?) ?? 0));
-        _tasks = merged;
+            .toList();
+        _rebuildTasks();
       });
     });
     _load();
@@ -205,24 +208,29 @@ class _TaskHomePageState extends State<TaskHomePage>
     final sub = _sessionsSub;
     if (sub == null || !mounted) return;
     if (!sub.state.ready) return;
-    final entries = sub.state.list
-        .where((e) =>
-            !_isRecentlyRemoved(e.sessionId) &&
-            !_archivedIds.contains(e.sessionId))
-        .toList();
+    log('[home] sessions-index ready count=${sub.state.list.length}');
     setState(() {
-      _tasks = mergeWorkspaceSessionTasks(
-        channelTasks: _tasks.where((task) {
-          if (task is! Map || task['taskId'] == null) return false;
-          return !_isRecentlyRemoved('${task['taskId']}');
-        }).toList(),
-        sessions: entries,
-        archivedIds: _archivedIds,
-        workspace: widget.workspace,
-      );
+      _rebuildTasks();
       _loading = false;
       _error = null;
     });
+    log('[home] visible tasks count=${_tasks.length}');
+  }
+
+  void _rebuildTasks() {
+    final sessions = _sessionsSub?.state.list ?? const <SessionEntry>[];
+    _tasks = mergeWorkspaceSessionTasks(
+      channelTasks: _channelTasks.where((task) {
+        if (task is! Map || task['taskId'] == null) return false;
+        return !_isRecentlyRemoved('${task['taskId']}');
+      }).toList(),
+      sessions: sessions.where((entry) {
+        return !_isRecentlyRemoved(entry.sessionId) &&
+            !_archivedIds.contains(entry.sessionId);
+      }).toList(),
+      archivedIds: _archivedIds,
+      workspace: widget.workspace,
+    );
   }
 
   Future<void> _load() async {
@@ -246,8 +254,11 @@ class _TaskHomePageState extends State<TaskHomePage>
             .catchError((Object _) => const []),
       ]);
       if (!mounted) return;
+      log('[home] channel lists tasks=${results[0] is List ? (results[0] as List).length : 0} '
+          'pinned=${results[1] is List ? (results[1] as List).length : 0} '
+          'archived=${results[2] is List ? (results[2] as List).length : 0}');
       setState(() {
-        _tasks = results[0] is List ? results[0] : const [];
+        _channelTasks = results[0] is List ? results[0] : const [];
         _pinned = results[1] is List ? results[1] : const [];
         _archived = results[2] is List ? results[2] : const [];
         _archivedIds
@@ -257,8 +268,8 @@ class _TaskHomePageState extends State<TaskHomePage>
               if (t is Map && t['taskId'] != null) '${t['taskId']}',
           ]);
         _loading = false;
+        _rebuildTasks();
       });
-      _mergeSessions();
     } catch (e) {
       if (!mounted) return;
       setState(() {

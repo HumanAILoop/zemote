@@ -4,8 +4,13 @@ import 'package:zemote/protocol/connection_params.dart';
 import 'package:zemote/protocol/crc32.dart';
 import 'package:zemote/protocol/ipc_codec.dart';
 import 'package:zemote/protocol/proof.dart';
+import 'package:zemote/protocol/conversation.dart';
 
 void main() {
+  test('Conversation V4 uses desktop protocol capability version', () {
+    expect(conversationProtocolAppVersion, '3.6.5');
+  });
+
   test('parse zemote connection url', () {
     final params = ZemoteConnectionParams.parse(
       'https://zcode.z.ai/remote/v4?sid=SID123&hash=HASH%3D&t=1785734607338'
@@ -18,12 +23,12 @@ void main() {
     expect(params.deviceMid, 'MID-1');
     expect(params.deviceName, 'DESKTOP');
     expect(params.appVersion, '3.6.5');
-    expect(params.relayWsUri.toString(),
-        'wss://zcode.z.ai/ws?mid=MID-1');
+    expect(params.relayWsUri.toString(), 'wss://zcode.z.ai/ws?mid=MID-1');
   });
 
   test('reject invalid url', () {
-    expect(ZemoteConnectionParams.parse('https://zcode.z.ai/remote/v4'), isNull);
+    expect(
+        ZemoteConnectionParams.parse('https://zcode.z.ai/remote/v4'), isNull);
     expect(ZemoteConnectionParams.parse('not a url'), isNull);
     expect(
       ZemoteConnectionParams.parse(

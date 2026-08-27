@@ -4,7 +4,8 @@ import 'package:zemote/protocol/conversation.dart';
 import 'package:zemote/ui/task_home_page.dart';
 
 void main() {
-  test('sessions-index adds new workspace sessions and refreshes stale fields', () {
+  test('sessions-index adds new workspace sessions and refreshes stale fields',
+      () {
     final result = mergeWorkspaceSessionTasks(
       channelTasks: [
         {
@@ -55,5 +56,42 @@ void main() {
     );
 
     expect(result, isEmpty);
+  });
+
+  test('empty sessions snapshot never clears channel task data', () {
+    final result = mergeWorkspaceSessionTasks(
+      channelTasks: const [
+        {
+          'taskId': 'channel-only',
+          'title': 'visible task',
+          'updatedAt': 10,
+        },
+      ],
+      sessions: const [],
+      archivedIds: const {},
+      workspace: const {'workspacePath': 'C:/work'},
+    );
+
+    expect(result, hasLength(1));
+    expect(result.single['taskId'], 'channel-only');
+  });
+
+  test('channel refresh never clears sessions-index-only tasks', () {
+    final result = mergeWorkspaceSessionTasks(
+      channelTasks: const [],
+      sessions: [
+        SessionEntry({
+          'sessionId': 'session-only',
+          'title': 'live session',
+          'phase': 'running',
+          'lastActivityAt': 20,
+        }),
+      ],
+      archivedIds: const {},
+      workspace: const {'workspacePath': 'C:/work'},
+    );
+
+    expect(result, hasLength(1));
+    expect(result.single['taskId'], 'session-only');
   });
 }

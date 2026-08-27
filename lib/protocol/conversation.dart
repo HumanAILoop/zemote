@@ -8,9 +8,10 @@ import 'package:flutter/foundation.dart';
 import 'channel_client.dart';
 import 'id.dart';
 import 'zemote_client.dart';
-import '../update/app_version.dart' as version_info;
 
 /// Conversation V4 protocol over the `zcode-agent` channel.
+const conversationProtocolAppVersion = '3.6.5';
+
 ///
 /// Flow (mirrors `sk()`/`uk()` in the web client):
 /// 1. `helloConversationV4()` + `initializeConversationV4(clientHello)`
@@ -40,7 +41,10 @@ class ConversationTransport {
   ConversationTransport({
     required this.session,
     required this.scope,
-    this.appVersion = version_info.appVersion,
+    // This is the desktop Conversation protocol capability version, not the
+    // Zemote release version. Sending 0.x here can disable V4 capabilities
+    // such as sessions-index during server negotiation.
+    this.appVersion = conversationProtocolAppVersion,
     this.onLog,
   }) {
     // A reopened bridge has no handshake state — start over (mirrors the
@@ -77,7 +81,8 @@ class ConversationTransport {
         },
       ]);
       _handshaken = true;
-    }().catchError((e) {
+    }()
+        .catchError((e) {
       _handshakeFuture = null;
       throw e;
     });
@@ -148,8 +153,7 @@ class ConversationTransport {
     // is dead and requests would otherwise hang until timeout. Once the
     // bridge recovers, the send goes through on the fresh transport.
     await session.waitHealthy(timeout: const Duration(seconds: 45));
-    final sub =
-        sessionId == null ? null : _subscriptions[sessionId];
+    final sub = sessionId == null ? null : _subscriptions[sessionId];
     final baseRevision = sessionId == null
         ? null
         : [
@@ -161,8 +165,7 @@ class ConversationTransport {
       'clientId': clientId,
       'sessionId': sessionId,
       if (_casCommands.contains(type)) 'baseRevision': baseRevision,
-      if (_rowTargetCommands.contains(type) &&
-          sub?.state.logEpoch != null)
+      if (_rowTargetCommands.contains(type) && sub?.state.logEpoch != null)
         'baseLogEpoch': sub!.state.logEpoch,
       'type': type,
       'payload': payload,
@@ -178,8 +181,7 @@ class ConversationTransport {
         res is Map &&
         res['status'] == 'stale' &&
         res['revisionAtDecision'] is num) {
-      final serverRevision =
-          (res['revisionAtDecision'] as num).toInt();
+      final serverRevision = (res['revisionAtDecision'] as num).toInt();
       _log('[v4] command $type stale, retry at rev $serverRevision');
       if (serverRevision > (_ackedRevisions[sessionId] ?? 0)) {
         _ackedRevisions[sessionId] = serverRevision;
@@ -192,9 +194,7 @@ class ConversationTransport {
       };
       res = await _sendCommandWithRetry(retryEnvelope, timeout);
     }
-    if (sessionId != null &&
-        res is Map &&
-        res['revisionAtDecision'] is num) {
+    if (sessionId != null && res is Map && res['revisionAtDecision'] is num) {
       final rev = (res['revisionAtDecision'] as num).toInt();
       final status = res['status'];
       // revisionAtDecision is the base at decision time; an accepted
@@ -215,9 +215,13 @@ class ConversationTransport {
   Future<dynamic> _sendCommandWithRetry(
       Map<String, dynamic> envelope, Duration timeout) async {
     try {
-      return await _channels.call(channel, 'sendConversationCommandV4', [
-        {...scope, 'envelope': envelope},
-      ], timeout: timeout);
+      return await _channels.call(
+          channel,
+          'sendConversationCommandV4',
+          [
+            {...scope, 'envelope': envelope},
+          ],
+          timeout: timeout);
     } on TimeoutException {
       // Retry only when the relay dropped mid-flight (bridge degraded): the
       // command then never reached the server. If the bridge is still
@@ -231,9 +235,13 @@ class ConversationTransport {
         'commandId': generateUuid(),
         'issuedAt': DateTime.now().millisecondsSinceEpoch,
       };
-      return _channels.call(channel, 'sendConversationCommandV4', [
-        {...scope, 'envelope': fresh},
-      ], timeout: timeout);
+      return _channels.call(
+          channel,
+          'sendConversationCommandV4',
+          [
+            {...scope, 'envelope': fresh},
+          ],
+          timeout: timeout);
     }
   }
 
@@ -361,8 +369,7 @@ class ConversationTransport {
   Future<dynamic> resumeGoal(String sessionId) =>
       sendCommand(sessionId, 'resumeGoal', {});
 
-  Future<dynamic> stop(String sessionId) =>
-      sendCommand(sessionId, 'stop', {});
+  Future<dynamic> stop(String sessionId) => sendCommand(sessionId, 'stop', {});
 
   Future<dynamic> compact(String sessionId) =>
       sendCommand(sessionId, 'compact', {});
@@ -417,8 +424,7 @@ class ConversationTransport {
         'feedback': feedback,
       });
 
-  Future<dynamic> retryTurn(
-          String sessionId, Map<String, dynamic> target) =>
+  Future<dynamic> retryTurn(String sessionId, Map<String, dynamic> target) =>
       sendCommand(sessionId, 'retryTurn', {'target': target});
 
   Future<dynamic> sendQueuedNow(String sessionId, String queueItemId) =>
@@ -444,8 +450,8 @@ class ConversationTransport {
     Map<String, dynamic> target,
     String newText,
   ) =>
-      sendCommand(sessionId, 'editUserQuery',
-          {'target': target, 'newText': newText});
+      sendCommand(
+          sessionId, 'editUserQuery', {'target': target, 'newText': newText});
 
   Future<dynamic> applyFileRewind(
           String sessionId, Map<String, dynamic> target) =>
@@ -519,10 +525,9 @@ class ConversationTransport {
       'uploadId': uploadId,
       'sessionId': sessionId,
     };
-    final totalChunks = (bytes.length + _attachmentChunkBytes - 1) ~/
-        _attachmentChunkBytes;
-    final checksum =
-        'sha256:${sha256.convert(bytes).toString()}';
+    final totalChunks =
+        (bytes.length + _attachmentChunkBytes - 1) ~/ _attachmentChunkBytes;
+    final checksum = 'sha256:${sha256.convert(bytes).toString()}';
 
     final beginRes = await _channels.call(channel, 'attachmentBeginV4', [
       {
@@ -544,15 +549,15 @@ class ConversationTransport {
         'bytes': bytes.length,
       };
     }
-    var nextChunk =
-        beginRes is Map ? (beginRes['nextChunkIndex'] as num?)?.toInt() ?? 0 : 0;
+    var nextChunk = beginRes is Map
+        ? (beginRes['nextChunkIndex'] as num?)?.toInt() ?? 0
+        : 0;
     for (var n = nextChunk; n < totalChunks; n++) {
       final start = n * _attachmentChunkBytes;
       final end = start + _attachmentChunkBytes > bytes.length
           ? bytes.length
           : start + _attachmentChunkBytes;
-      final chunkRes =
-          await _channels.call(channel, 'attachmentChunkV4', [
+      final chunkRes = await _channels.call(channel, 'attachmentChunkV4', [
         {
           ...scope,
           ...base,
@@ -560,8 +565,9 @@ class ConversationTransport {
           'dataBase64': base64.encode(Uint8List.sublistView(bytes, start, end)),
         },
       ]);
-      nextChunk =
-          chunkRes is Map ? (chunkRes['nextChunkIndex'] as num?)?.toInt() ?? n + 1 : n + 1;
+      nextChunk = chunkRes is Map
+          ? (chunkRes['nextChunkIndex'] as num?)?.toInt() ?? n + 1
+          : n + 1;
       if (nextChunk != n + 1) {
         throw StateError('fault.attachment.invalidServerProgress');
       }
@@ -806,7 +812,9 @@ abstract class _SubscriptionBase<T extends ChangeNotifier> {
       final res = await _transport._channels.call(
         ConversationTransport.channel,
         _subscribeMethod,
-        [{..._transport.scope, ..._subscribeArgs}],
+        [
+          {..._transport.scope, ..._subscribeArgs}
+        ],
         // The desktop may need to warm the session runtime before answering —
         // give the subscribe call generous room instead of timing out at the
         // 30s channel default.
@@ -855,7 +863,9 @@ abstract class _SubscriptionBase<T extends ChangeNotifier> {
         await _transport._channels.call(
           ConversationTransport.channel,
           _unsubscribeMethod,
-          [{..._transport.scope, 'subscriptionId': oldId, ..._unsubscribeArgs}],
+          [
+            {..._transport.scope, 'subscriptionId': oldId, ..._unsubscribeArgs}
+          ],
         );
       } catch (_) {}
     }
@@ -904,8 +914,8 @@ abstract class _SubscriptionBase<T extends ChangeNotifier> {
       return;
     }
     if (count < 1 || count > 64 || index < 0 || index >= count) return;
-    final assembly = _fragments.putIfAbsent(
-        id, () => _LogicalFrameAssembly(count));
+    final assembly =
+        _fragments.putIfAbsent(id, () => _LogicalFrameAssembly(count));
     if (assembly.count != count) {
       _fragments.remove(id);
       return;
@@ -989,16 +999,26 @@ class ConversationSubscription extends _SubscriptionBase<ConversationState> {
   ConversationSubscription._(ConversationTransport transport, this.sessionId)
       : super(transport, ConversationState(), 'v4');
 
-  @override String get _frameEventName => 'onDynamicConversationFrame';
-  @override String get _subscribeMethod => 'subscribeConversationV4';
-  @override String get _unsubscribeMethod => 'unsubscribeConversationV4';
-  @override String get _resyncMethod => 'resyncConversationV4';
-  @override Map<String, dynamic> get _subscribeArgs => {'sessionId': sessionId};
-  @override Map<String, dynamic> get _unsubscribeArgs => const {};
-  @override Map<String, dynamic> get _resyncArgs => const {'forceSnapshot': true};
-  @override String get topic => 'conversation/$sessionId';
-  @override int get _resyncSeq => state.seq;
-  @override String? get _resyncEpoch => state.logEpoch;
+  @override
+  String get _frameEventName => 'onDynamicConversationFrame';
+  @override
+  String get _subscribeMethod => 'subscribeConversationV4';
+  @override
+  String get _unsubscribeMethod => 'unsubscribeConversationV4';
+  @override
+  String get _resyncMethod => 'resyncConversationV4';
+  @override
+  Map<String, dynamic> get _subscribeArgs => {'sessionId': sessionId};
+  @override
+  Map<String, dynamic> get _unsubscribeArgs => const {};
+  @override
+  Map<String, dynamic> get _resyncArgs => const {'forceSnapshot': true};
+  @override
+  String get topic => 'conversation/$sessionId';
+  @override
+  int get _resyncSeq => state.seq;
+  @override
+  String? get _resyncEpoch => state.logEpoch;
 
   @override
   void _onSubscribeAck(Map<String, dynamic> ack) {
@@ -1036,8 +1056,7 @@ class ConversationSubscription extends _SubscriptionBase<ConversationState> {
     _watchdog?.cancel();
     _watchdog = Timer.periodic(const Duration(seconds: 10), (_) {
       if (_disposed) return;
-      final quietSeconds =
-          DateTime.now().difference(_lastFrameAt).inSeconds;
+      final quietSeconds = DateTime.now().difference(_lastFrameAt).inSeconds;
       if (quietSeconds < 20) return;
       final streaming = state.rows.any((r) => r['state'] == 'streaming');
       if (state.isRunning || streaming) {
@@ -1221,8 +1240,7 @@ class SessionsIndexState extends ChangeNotifier {
       if (list is List) {
         for (final s in list) {
           if (s is Map) {
-            final entry =
-                SessionEntry(s.cast<String, dynamic>());
+            final entry = SessionEntry(s.cast<String, dynamic>());
             sessions[entry.sessionId] = entry;
           }
         }
@@ -1239,8 +1257,8 @@ class SessionsIndexState extends ChangeNotifier {
         for (final d in deltas) {
           if (d is! Map) continue;
           if (d['op'] == 'session.upserted' && d['session'] is Map) {
-            final entry = SessionEntry(
-                (d['session'] as Map).cast<String, dynamic>());
+            final entry =
+                SessionEntry((d['session'] as Map).cast<String, dynamic>());
             sessions[entry.sessionId] = entry;
           } else if (d['op'] == 'session.removed') {
             sessions.remove('${d['sessionId']}');
@@ -1254,15 +1272,18 @@ class SessionsIndexState extends ChangeNotifier {
   }
 }
 
-class SessionsIndexSubscription
-    extends _SubscriptionBase<SessionsIndexState> {
+class SessionsIndexSubscription extends _SubscriptionBase<SessionsIndexState> {
   SessionsIndexSubscription._(ConversationTransport transport)
       : super(transport, SessionsIndexState(), 'v4-si');
 
-  @override String get _frameEventName => 'onDynamicSessionsIndexFrame';
-  @override String get _subscribeMethod => 'subscribeSessionsIndexV4';
-  @override String get _unsubscribeMethod => 'unsubscribeSessionsIndexV4';
-  @override String get _resyncMethod => 'resyncSessionsIndexV4';
+  @override
+  String get _frameEventName => 'onDynamicSessionsIndexFrame';
+  @override
+  String get _subscribeMethod => 'subscribeSessionsIndexV4';
+  @override
+  String get _unsubscribeMethod => 'unsubscribeSessionsIndexV4';
+  @override
+  String get _resyncMethod => 'resyncSessionsIndexV4';
   @override
   Map<String, dynamic> get _subscribeArgs =>
       const {'runtimePolicy': 'existing-only'};
@@ -1275,8 +1296,10 @@ class SessionsIndexSubscription
   @override
   String get topic =>
       'sessions-index/${_transport.scope['workspaceIdentity'] ?? _transport.scope['workspacePath']}';
-  @override int get _resyncSeq => state.seq;
-  @override String? get _resyncEpoch => state.logEpoch;
+  @override
+  int get _resyncSeq => state.seq;
+  @override
+  String? get _resyncEpoch => state.logEpoch;
 
   @override
   Future<void> _onDispose() async {
@@ -1381,8 +1404,8 @@ class ConversationState extends ChangeNotifier {
       case 'row.upserted':
         final row = (delta['row'] as Map).cast<String, dynamic>();
         final id = (row['rowId'] as num?)?.toInt();
-        final index = rows.indexWhere(
-            (r) => (r['rowId'] as num?)?.toInt() == id);
+        final index =
+            rows.indexWhere((r) => (r['rowId'] as num?)?.toInt() == id);
         if (index != -1) rows[index] = row;
         break;
       case 'row.removed':
@@ -1405,8 +1428,8 @@ class ConversationState extends ChangeNotifier {
         final rowId = (delta['rowId'] as num?)?.toInt();
         final path = delta['path'] as String?;
         final append = delta['append'] as String? ?? '';
-        final index = rows.indexWhere(
-            (r) => (r['rowId'] as num?)?.toInt() == rowId);
+        final index =
+            rows.indexWhere((r) => (r['rowId'] as num?)?.toInt() == rowId);
         if (index != -1) {
           rows[index] = _appendToRow(rows[index], path, append);
         }
@@ -1504,15 +1527,13 @@ class ConversationState extends ChangeNotifier {
       (snapshot?['control'] as Map?)?.cast<String, dynamic>();
 
   /// Current conversation revision (CAS commands base this on).
-  int get revision =>
-      (snapshot?['revision'] as num?)?.toInt() ?? 0;
+  int get revision => (snapshot?['revision'] as num?)?.toInt() ?? 0;
 
   String get phase => control?['phase'] as String? ?? '';
 
   bool get canStop => control?['canStop'] == true;
 
-  bool get isRunning =>
-      phase == 'running' || phase == 'prewarming';
+  bool get isRunning => phase == 'running' || phase == 'prewarming';
 
   /// Session config: {provider, model, thought, thoughtLevels, followupMode,
   /// mode}.
@@ -1551,14 +1572,12 @@ class ConversationState extends ChangeNotifier {
 
   /// The cursor for `rowsRange` is the oldest row currently held, not the
   /// snapshot projection head (`firstRowId`).
-  int? get oldestRowId => rows.isEmpty
-      ? firstRowId
-      : (rows.first['rowId'] as num?)?.toInt();
+  int? get oldestRowId =>
+      rows.isEmpty ? firstRowId : (rows.first['rowId'] as num?)?.toInt();
 
   /// Prepends older rows loaded via rowsRange (deduped by rowId).
   void prependOlderRows(List<Map<String, dynamic>> older, int? newFirstRowId) {
-    final existing =
-        rows.map((r) => (r['rowId'] as num?)?.toInt()).toSet();
+    final existing = rows.map((r) => (r['rowId'] as num?)?.toInt()).toSet();
     final fresh = older
         .where((r) => !existing.contains((r['rowId'] as num?)?.toInt()))
         .toList();
@@ -1576,10 +1595,7 @@ class ConversationState extends ChangeNotifier {
   List<Map<String, dynamic>> get backgroundWorks {
     final list = snapshot?['backgroundWorks'];
     if (list is! List) return const [];
-    return list
-        .whereType<Map>()
-        .map((e) => e.cast<String, dynamic>())
-        .toList();
+    return list.whereType<Map>().map((e) => e.cast<String, dynamic>()).toList();
   }
 
   Map<String, dynamic>? get goal =>
@@ -1590,15 +1606,11 @@ class ConversationState extends ChangeNotifier {
 
   /// inputRouting: {mode: startNow|enqueue|guide|reject|choice, reasonCode?}
   String get inputRoutingMode =>
-      (snapshot?['inputRouting'] as Map?)?['mode'] as String? ??
-      'startNow';
+      (snapshot?['inputRouting'] as Map?)?['mode'] as String? ?? 'startNow';
 
   List<Map<String, dynamic>> get pendingInteractions {
     final list = snapshot?['pendingInteractions'];
     if (list is! List) return const [];
-    return list
-        .whereType<Map>()
-        .map((e) => e.cast<String, dynamic>())
-        .toList();
+    return list.whereType<Map>().map((e) => e.cast<String, dynamic>()).toList();
   }
 }

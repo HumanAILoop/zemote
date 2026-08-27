@@ -35,13 +35,14 @@ class ChannelClient {
     try {
       final reader = ValueReader(body);
       final header = decodeValue(reader);
-      if (header is! List || header.length < 2) return;
+      if (header is! List || header.isEmpty || header[0] is! num) return;
       final type = (header[0] as num).toInt();
       if (type == resInitialize) {
         onLog?.call('[ipc] initialized');
         if (!_initialized.isCompleted) _initialized.complete();
         return;
       }
+      if (header.length < 2 || header[1] is! num) return;
       final id = (header[1] as num).toInt();
       final data = decodeValue(reader);
       _handlers[id]?.call(type, data);
@@ -50,8 +51,8 @@ class ChannelClient {
     }
   }
 
-  void _sendRequest(int reqType, int id, String channel, String name,
-      Object? arg) {
+  void _sendRequest(
+      int reqType, int id, String channel, String name, Object? arg) {
     final writer = ValueWriter();
     encodeValue(writer, [reqType, id, channel, name]);
     encodeValue(writer, arg);
