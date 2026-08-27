@@ -41,7 +41,9 @@ class ZemoteConnectionParams {
     if ((uri.scheme != 'https' && uri.scheme != 'wss') ||
         sid == null ||
         hash == null ||
-        t == null) return null;
+        t == null) {
+      return null;
+    }
     return ZemoteConnectionParams(
       deviceSid: sid,
       passHash: hash,

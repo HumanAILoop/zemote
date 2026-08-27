@@ -67,11 +67,12 @@ void main() {
       expect(account.label, 'zcode.z.ai');
     });
 
-    test('fromUrl defaults label when host is empty', () {
+    test('fromUrl defaults label for rejected insecure URL', () {
       final account = Account.fromUrl(
         'http:///remote/v4?sid=s&hash=h&t=1',
       );
-      expect(account.label, '');
+      expect(account.label, '未命名设备');
+      expect(account.params, isNull);
     });
 
     test('fromUrl returns Account with null params for invalid URL', () {
