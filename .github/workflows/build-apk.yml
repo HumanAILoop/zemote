@@ -51,15 +51,18 @@ jobs:
             echo "WARN: ANDROID_KEYSTORE_BASE64 secret missing; APK will use debug signing."
           fi
 
-      - name: Build APK (release)
-        run: flutter build apk --release --split-per-abi
+      - name: Build ABI APKs (release)
+        run: |
+          flutter build apk --release --target-platform android-arm64
+          cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/zemote-arm64-v8a.apk
+          flutter build apk --release --target-platform android-arm
+          cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/zemote-armeabi-v7a.apk
+          flutter build apk --release --target-platform android-x64
+          cp build/app/outputs/flutter-apk/app-release.apk build/app/outputs/flutter-apk/zemote-x86_64.apk
 
-      - name: Prepare ABI APKs and checksums
+      - name: Generate ABI checksums
         run: |
           cd build/app/outputs/flutter-apk
-          mv app-arm64-v8a-release.apk zemote-arm64-v8a.apk
-          mv app-armeabi-v7a-release.apk zemote-armeabi-v7a.apk
-          mv app-x86_64-release.apk zemote-x86_64.apk
           md5sum zemote-arm64-v8a.apk > zemote-arm64-v8a.apk.md5
           md5sum zemote-armeabi-v7a.apk > zemote-armeabi-v7a.apk.md5
           md5sum zemote-x86_64.apk > zemote-x86_64.apk.md5
