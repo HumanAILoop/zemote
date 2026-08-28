@@ -2,6 +2,17 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [0.5.0] - 2026-08-28
+
+### Added
+- 设置页新增“接收 Beta 更新”开关，默认只接收稳定版；开启后同时接收 Beta/RC 预发布版本。
+- 更新检测支持 `vX.Y.Z-beta.N`、`vX.Y.Z-rc.N` 预发布版本排序和 GitHub Pre-release 过滤。
+- 稳定版和 Beta 版沿用同一应用与签名，分别通过 `main`、`beta` 分支打标签发布。
+- 计划模式下在聊天页实时显示执行计划、步骤状态和完成进度。
+- 计划内容同时支持会话快照、`conversationPlansV4` 返回和 `update_plan` / `TodoWrite` 工具调用解析。
+- 切换计划模式或计划 revision 更新时自动刷新计划数据，无法识别结构时可查看完整原始计划。
+- 会话列表增加按工作区隔离的本地缓存；设置页新增诊断中心。
+
 ## [0.4.4] - 2026-08-27
 
 ### Fixed

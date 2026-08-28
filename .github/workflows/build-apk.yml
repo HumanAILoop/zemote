@@ -100,4 +100,4 @@ jobs:
           name: ${{ github.ref_name }}
           body_path: release-notes.md
           draft: false
-          prerelease: false
+          prerelease: ${{ contains(github.ref_name, '-') }}

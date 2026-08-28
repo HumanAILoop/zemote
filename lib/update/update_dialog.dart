@@ -215,7 +215,8 @@ class _UpdateDialogState extends State<_UpdateDialog> {
     final info = widget.info;
     final notes = (info.body ?? '').trim();
     return AlertDialog(
-      title: Text('发现新版本 v${info.latestVersion}'),
+      title: Text(
+          '发现${info.isPrerelease ? ' Beta ' : ' '}新版本 v${info.latestVersion}'),
       content: SizedBox(
         width: 420,
         child: Column(
@@ -233,7 +234,10 @@ class _UpdateDialogState extends State<_UpdateDialog> {
                   ),
                 )
               else
-                const Text('有新的 Zemote 版本可用。', style: TextStyle(fontSize: 13)),
+                Text(
+                  info.isPrerelease ? '这是预发布版本，可能包含实验性功能。' : '有新的 Zemote 版本可用。',
+                  style: const TextStyle(fontSize: 13),
+                ),
               if (_error != null) ...[
                 const SizedBox(height: 10),
                 Text('$_error',

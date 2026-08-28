@@ -6,6 +6,7 @@ import '../protocol/channel_client.dart';
 import '../protocol/conversation.dart';
 import '../protocol/zemote_client.dart';
 import '../state/log_store.dart';
+import '../state/session_list_cache.dart';
 import 'automations_page.dart';
 import 'channel_explorer_page.dart';
 import 'chat_page.dart';
@@ -95,9 +96,11 @@ class _TaskHomePageState extends State<TaskHomePage>
   bool _loading = true;
   String? _error;
   String _query = '';
+  String _statusFilter = 'all';
   StreamSubscription? _updatedSub;
   ConversationTransport? _convTransport;
   SessionsIndexSubscription? _sessionsSub;
+  final _cache = const SessionListCache();
 
   /// Locally removed/archived task ids (with timestamp). The sessions-index
   /// push lags behind, so merged lists must not resurrect them.
@@ -134,6 +137,7 @@ class _TaskHomePageState extends State<TaskHomePage>
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     _convTransport = widget.session.conversation(_scope, onLog: log);
+    _loadCache();
     _subscribeSessionsIndex();
     _updatedSub = widget.client.workspaceListUpdated.listen((result) {
       if (!mounted || result is! Map) return;
@@ -173,6 +177,7 @@ class _TaskHomePageState extends State<TaskHomePage>
             .where((t) => !_isRecentlyRemoved('${t['taskId']}'))
             .toList();
         _rebuildTasks();
+        _saveCache();
       });
     });
     _load();
@@ -215,6 +220,7 @@ class _TaskHomePageState extends State<TaskHomePage>
       _error = null;
     });
     log('[home] visible tasks count=${_tasks.length}');
+    _saveCache();
   }
 
   void _rebuildTasks() {
@@ -231,6 +237,22 @@ class _TaskHomePageState extends State<TaskHomePage>
       archivedIds: _archivedIds,
       workspace: widget.workspace,
     );
+  }
+
+  Future<void> _loadCache() async {
+    final cached = await _cache.read(widget.workspace);
+    if (!mounted || cached.isEmpty || _tasks.isNotEmpty) return;
+    setState(() {
+      _channelTasks = cached;
+      _rebuildTasks();
+      _loading = false;
+    });
+    log('[home] cache restored count=${cached.length}');
+  }
+
+  void _saveCache() {
+    if (_tasks.isEmpty) return;
+    unawaited(_cache.write(widget.workspace, _tasks));
   }
 
   Future<void> _load() async {
@@ -270,6 +292,7 @@ class _TaskHomePageState extends State<TaskHomePage>
         _loading = false;
         _rebuildTasks();
       });
+      _saveCache();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -512,8 +535,8 @@ class _TaskHomePageState extends State<TaskHomePage>
                 },
               ),
             ListTile(
-              leading: const Icon(Icons.code),
-              title: const Text('查看原始快照'),
+              leading: const Icon(Icons.info_outline),
+              title: const Text('任务详情'),
               onTap: () {
                 Navigator.pop(context);
                 Navigator.of(context).push(
@@ -623,9 +646,20 @@ class _TaskHomePageState extends State<TaskHomePage>
   }
 
   List<dynamic> _filtered(List<dynamic> tasks) {
-    if (_query.isEmpty) return tasks;
     final q = _query.toLowerCase();
-    return tasks.where((t) => _taskTitle(t).toLowerCase().contains(q)).toList();
+    return tasks.where((task) {
+      if (q.isNotEmpty && !_taskTitle(task).toLowerCase().contains(q)) {
+        return false;
+      }
+      if (_statusFilter == 'all' || task is! Map) return true;
+      final status = _taskStatus(task);
+      return switch (_statusFilter) {
+        'running' => status == 'running' || status == 'prewarming',
+        'failed' => status == 'failed' || status == 'error',
+        'completed' => status.contains('completed'),
+        _ => true,
+      };
+    }).toList();
   }
 
   @override
@@ -714,6 +748,30 @@ class _TaskHomePageState extends State<TaskHomePage>
                     ),
             ),
             onChanged: (v) => setState(() => _query = v),
+          ),
+        ),
+        SizedBox(
+          height: 38,
+          child: ListView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            children: [
+              for (final item in const [
+                ('all', '全部'),
+                ('running', '运行中'),
+                ('failed', '失败'),
+                ('completed', '已完成'),
+              ])
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 3),
+                  child: ChoiceChip(
+                    label: Text(item.$2, style: const TextStyle(fontSize: 11)),
+                    selected: _statusFilter == item.$1,
+                    onSelected: (_) => setState(() => _statusFilter = item.$1),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                ),
+            ],
           ),
         ),
         TabBar(

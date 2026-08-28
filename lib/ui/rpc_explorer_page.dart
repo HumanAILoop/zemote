@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import '../protocol/zemote_client.dart';
+import 'structured_data_view.dart';
 import 'theme.dart';
 
 /// Raw relay payload explorer: send arbitrary `zcode_type` payloads and
@@ -20,7 +21,9 @@ class _RpcExplorerPageState extends State<RpcExplorerPage> {
   final _payloadController = TextEditingController(
     text: '{\n  "zcode_type": "workspace-list-request"\n}',
   );
-  String _output = '';
+  Object? _output;
+  String? _outputMessage;
+  bool _showRaw = false;
   bool _busy = false;
 
   @override
@@ -32,11 +35,11 @@ class _RpcExplorerPageState extends State<RpcExplorerPage> {
   Future<void> _send() async {
     Map<String, dynamic> payload;
     try {
-      payload = (jsonDecode(_payloadController.text) as Map)
-          .cast<String, dynamic>();
+      payload =
+          (jsonDecode(_payloadController.text) as Map).cast<String, dynamic>();
     } catch (e) {
       if (!mounted) return;
-      setState(() => _output = 'JSON 解析失败: $e');
+      setState(() => _outputMessage = 'JSON 解析失败: $e');
       return;
     }
     payload['requestId'] ??=
@@ -44,7 +47,8 @@ class _RpcExplorerPageState extends State<RpcExplorerPage> {
     final requestId = payload['requestId'] as String;
     setState(() {
       _busy = true;
-      _output = '已发送，requestId=$requestId\n等待响应…';
+      _outputMessage = '已发送，等待响应…';
+      _output = null;
     });
     try {
       final res = await widget.client.request(
@@ -54,13 +58,14 @@ class _RpcExplorerPageState extends State<RpcExplorerPage> {
       );
       if (!mounted) return;
       setState(() {
-        _output = const JsonEncoder.withIndent('  ').convert(res);
+        _output = res;
+        _outputMessage = null;
         _busy = false;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _output = '无响应或失败: $e';
+        _outputMessage = '无响应或失败: $e';
         _busy = false;
       });
     }
@@ -90,6 +95,17 @@ class _RpcExplorerPageState extends State<RpcExplorerPage> {
               label: const Text('发送'),
             ),
             const SizedBox(height: 8),
+            if (_output != null)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  const Text('原始数据', style: TextStyle(fontSize: 11)),
+                  Switch(
+                    value: _showRaw,
+                    onChanged: (value) => setState(() => _showRaw = value),
+                  ),
+                ],
+              ),
             Expanded(
               child: Container(
                 width: double.infinity,
@@ -99,11 +115,16 @@ class _RpcExplorerPageState extends State<RpcExplorerPage> {
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: SingleChildScrollView(
-                  child: SelectableText(
-                    _output,
-                    style:
-                        const TextStyle(fontFamily: 'monospace', fontSize: 11),
-                  ),
+                  child: _outputMessage != null
+                      ? Text(_outputMessage!)
+                      : _showRaw
+                          ? SelectableText(
+                              const JsonEncoder.withIndent('  ')
+                                  .convert(_output),
+                              style: const TextStyle(
+                                  fontFamily: 'monospace', fontSize: 11),
+                            )
+                          : StructuredDataView(data: _output),
                 ),
               ),
             ),

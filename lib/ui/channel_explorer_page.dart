@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../protocol/channel_client.dart';
 import '../protocol/zemote_client.dart';
+import 'structured_data_view.dart';
 
 /// Channel-level RPC explorer: call any method on any IPC channel
 /// (zcode-task, zcode-agent, skills, mcp-sync, plugins, usage-stats, …).
@@ -42,10 +43,11 @@ class _ChannelExplorerPageState extends State<ChannelExplorerPage> {
   ];
 
   String _channel = Channels.zcodeTask;
-  final _methodController =
-      TextEditingController(text: 'listTasks');
+  final _methodController = TextEditingController(text: 'listTasks');
   final _argsController = TextEditingController(text: '[{}]');
-  String _output = '';
+  Object? _output;
+  String? _outputMessage;
+  bool _showRaw = false;
   bool _busy = false;
 
   @override
@@ -62,12 +64,13 @@ class _ChannelExplorerPageState extends State<ChannelExplorerPage> {
       args = decoded is List ? decoded : [decoded];
     } catch (e) {
       if (!mounted) return;
-      setState(() => _output = 'args JSON 解析失败（应为数组）: $e');
+      setState(() => _outputMessage = '参数解析失败（应为 JSON 数组）: $e');
       return;
     }
     setState(() {
       _busy = true;
-      _output = '调用中…';
+      _outputMessage = '调用中…';
+      _output = null;
     });
     try {
       final res = await widget.session.channels.call(
@@ -78,13 +81,14 @@ class _ChannelExplorerPageState extends State<ChannelExplorerPage> {
       );
       if (!mounted) return;
       setState(() {
-        _output = const JsonEncoder.withIndent('  ').convert(res);
+        _output = res;
+        _outputMessage = null;
         _busy = false;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _output = '失败: $e';
+        _outputMessage = '失败: $e';
         _busy = false;
       });
     }
@@ -109,16 +113,15 @@ class _ChannelExplorerPageState extends State<ChannelExplorerPage> {
                       for (final c in _channels)
                         DropdownMenuItem(value: c, child: Text(c)),
                     ],
-                    onChanged: (v) =>
-                        setState(() => _channel = v ?? _channel),
+                    onChanged: (v) => setState(() => _channel = v ?? _channel),
                   ),
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: TextField(
                     controller: _methodController,
-                    style: const TextStyle(
-                        fontFamily: 'monospace', fontSize: 13),
+                    style:
+                        const TextStyle(fontFamily: 'monospace', fontSize: 13),
                     decoration: const InputDecoration(
                         labelText: 'method', isDense: true),
                   ),
@@ -129,8 +132,7 @@ class _ChannelExplorerPageState extends State<ChannelExplorerPage> {
             TextField(
               controller: _argsController,
               maxLines: 5,
-              style:
-                  const TextStyle(fontFamily: 'monospace', fontSize: 12),
+              style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
               decoration: const InputDecoration(
                 labelText: 'args（JSON 数组）',
                 alignLabelWithHint: true,
@@ -146,6 +148,17 @@ class _ChannelExplorerPageState extends State<ChannelExplorerPage> {
               ),
             ),
             const SizedBox(height: 8),
+            if (_output != null)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  const Text('原始数据', style: TextStyle(fontSize: 11)),
+                  Switch(
+                    value: _showRaw,
+                    onChanged: (value) => setState(() => _showRaw = value),
+                  ),
+                ],
+              ),
             Expanded(
               child: Container(
                 width: double.infinity,
@@ -155,11 +168,16 @@ class _ChannelExplorerPageState extends State<ChannelExplorerPage> {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: SingleChildScrollView(
-                  child: SelectableText(
-                    _output,
-                    style: const TextStyle(
-                        fontFamily: 'monospace', fontSize: 11),
-                  ),
+                  child: _outputMessage != null
+                      ? Text(_outputMessage!)
+                      : _showRaw
+                          ? SelectableText(
+                              const JsonEncoder.withIndent('  ')
+                                  .convert(_output),
+                              style: const TextStyle(
+                                  fontFamily: 'monospace', fontSize: 11),
+                            )
+                          : StructuredDataView(data: _output),
                 ),
               ),
             ),

@@ -1,11 +1,10 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
 
 import '../protocol/channel_client.dart';
 import '../protocol/zemote_client.dart';
 
 import 'theme.dart';
+import 'structured_data_view.dart';
 
 /// Read-only overview of managed services (plugins / cron automations).
 /// MCP & Skills are desktop-config-driven; use the Channel RPC explorer
@@ -50,7 +49,7 @@ class _ServicesPageState extends State<ServicesPage>
           tabs: const [
             Tab(text: '插件'),
             Tab(text: '定时任务'),
-            Tab(text: 'MCP / Skills'),
+            Tab(text: 'Skills / 命令'),
           ],
         ),
       ),
@@ -81,7 +80,7 @@ class _ServicesPageState extends State<ServicesPage>
                 item['enabled'] == true ? '已启用' : '已停用',
             ].where((s) => s.isNotEmpty && s != 'null').join(' · '),
           ),
-          const _McpSkillsHint(),
+          _SkillsCommandsPage(session: widget.session, scope: widget.scope),
         ],
       ),
     );
@@ -161,10 +160,7 @@ class _ServiceListState extends State<_ServiceList>
       }
     }
     if (list == null) return const [];
-    return list
-        .whereType<Map>()
-        .map((e) => e.cast<String, dynamic>())
-        .toList();
+    return list.whereType<Map>().map((e) => e.cast<String, dynamic>()).toList();
   }
 
   @override
@@ -184,8 +180,7 @@ class _ServiceListState extends State<_ServiceList>
                   style: TextStyle(color: Colors.red.shade200),
                   textAlign: TextAlign.center),
               const SizedBox(height: 12),
-              OutlinedButton(
-                  onPressed: _load, child: const Text('重试')),
+              OutlinedButton(onPressed: _load, child: const Text('重试')),
             ],
           ),
         ),
@@ -199,15 +194,18 @@ class _ServiceListState extends State<_ServiceList>
           children: [
             const SizedBox(height: 80),
             Center(
-              child: SelectableText(
-                _data == null
-                    ? '（空）'
-                    : const JsonEncoder.withIndent('  ').convert(_data),
-                style: TextStyle(
-                    fontFamily: 'monospace',
-                    fontSize: 11,
-                    color: ZInk.muted(context)),
-              ),
+              child: _data == null
+                  ? Text('暂无数据', style: TextStyle(color: ZInk.muted(context)))
+                  : Column(
+                      children: [
+                        StructuredDataView(data: _data),
+                        TextButton(
+                          onPressed: () => showRawDataDialog(context,
+                              title: '服务数据 · 原始数据', data: _data),
+                          child: const Text('查看原始数据'),
+                        ),
+                      ],
+                    ),
             ),
           ],
         ),
@@ -226,15 +224,19 @@ class _ServiceListState extends State<_ServiceList>
               title: Text(widget.titleOf(item),
                   style: const TextStyle(fontSize: 14)),
               subtitle: Text(widget.subtitleOf(item),
-                  style: TextStyle(
-                      fontSize: 11, color: ZInk.faint(context))),
+                  style: TextStyle(fontSize: 11, color: ZInk.faint(context))),
               children: [
                 Padding(
                   padding: const EdgeInsets.all(12),
-                  child: SelectableText(
-                    const JsonEncoder.withIndent('  ').convert(item),
-                    style: const TextStyle(
-                        fontFamily: 'monospace', fontSize: 10.5),
+                  child: Column(
+                    children: [
+                      StructuredDataView(data: item),
+                      TextButton(
+                        onPressed: () => showRawDataDialog(context,
+                            title: '服务详情 · 原始数据', data: item),
+                        child: const Text('查看原始数据'),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -246,27 +248,100 @@ class _ServiceListState extends State<_ServiceList>
   }
 }
 
-class _McpSkillsHint extends StatelessWidget {
-  const _McpSkillsHint();
+class _SkillsCommandsPage extends StatefulWidget {
+  final BridgeSession session;
+  final Map<String, dynamic> scope;
+
+  const _SkillsCommandsPage({required this.session, required this.scope});
+
+  @override
+  State<_SkillsCommandsPage> createState() => _SkillsCommandsPageState();
+}
+
+class _SkillsCommandsPageState extends State<_SkillsCommandsPage> {
+  List<Map<String, dynamic>> _skills = const [];
+  List<Map<String, dynamic>> _commands = const [];
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() => _loading = true);
+    final results = await Future.wait([
+      widget.session.channels.call(
+          Channels.skills, 'list', [widget.scope]).catchError((_) => const []),
+      widget.session.channels.call(Channels.commands, 'list',
+          [widget.scope]).catchError((_) => const []),
+    ]);
+    if (!mounted) return;
+    setState(() {
+      _skills = _items(results[0], 'skills');
+      _commands = _items(results[1], 'commands');
+      _loading = false;
+    });
+  }
+
+  List<Map<String, dynamic>> _items(Object? value, String key) {
+    final list = value is List
+        ? value
+        : value is Map
+            ? value[key]
+            : null;
+    if (list is! List) return const [];
+    return list
+        .whereType<Map>()
+        .map((item) => item.cast<String, dynamic>())
+        .toList();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.extension_outlined,
-                size: 40, color: ZInk.ghost(context)),
-            const SizedBox(height: 16),
-            Text(
-              'MCP 服务器与 Skills 由桌面端配置驱动。\n可在「设置 → Channel RPC 调试器」中选择\nmcp-sync / skills channel 查看与操作。',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: ZInk.faint(context), height: 1.7),
+    if (_loading) return const Center(child: CircularProgressIndicator());
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          const Text('Skills',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          if (_skills.isEmpty) const ListTile(title: Text('暂无 Skills')),
+          for (final skill in _skills)
+            Card(
+              child: ListTile(
+                leading: Icon(skill['enabled'] == false
+                    ? Icons.toggle_off
+                    : Icons.auto_awesome),
+                title: Text('${skill['name'] ?? skill['id'] ?? '未命名 Skill'}'),
+                subtitle: Text('${skill['description'] ?? ''}'),
+                onTap: () => showStructuredDataSheet(context,
+                    title: 'Skill 详情', data: skill),
+              ),
             ),
-          ],
-        ),
+          const SizedBox(height: 16),
+          const Text('自定义命令',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          if (_commands.isEmpty) const ListTile(title: Text('暂无自定义命令')),
+          for (final command in _commands)
+            Card(
+              child: ListTile(
+                leading: const Icon(Icons.bolt_outlined),
+                title:
+                    Text('/${command['name'] ?? command['id'] ?? 'command'}'),
+                subtitle: Text(
+                    '${command['description'] ?? command['prompt'] ?? ''}',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis),
+                onTap: () => showStructuredDataSheet(context,
+                    title: '命令详情', data: command),
+              ),
+            ),
+        ],
       ),
     );
   }

@@ -1,8 +1,20 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:zemote/update/update_checker.dart';
+import 'package:zemote/update/update_channel.dart';
 
 void main() {
+  test('beta channel setting persists', () async {
+    SharedPreferences.setMockInitialValues({});
+    final settings = UpdateChannelSettings();
+    await settings.load();
+    expect(settings.receiveBetaUpdates, isFalse);
+    await settings.setReceiveBetaUpdates(true);
+    final reloaded = UpdateChannelSettings();
+    await reloaded.load();
+    expect(reloaded.receiveBetaUpdates, isTrue);
+  });
   group('compareVersions', () {
     test('equal versions', () {
       expect(compareVersions('0.2.0', '0.2.0'), 0);
@@ -18,6 +30,17 @@ void main() {
     test('older detection', () {
       expect(compareVersions('0.1.0', '0.2.0'), lessThan(0));
       expect(compareVersions('0.2.9', '0.2.10'), lessThan(0));
+    });
+
+    test('pre-release versions sort before stable versions', () {
+      expect(compareVersions('0.5.0-beta.2', '0.5.0-beta.1'), greaterThan(0));
+      expect(compareVersions('0.5.0-rc.1', '0.5.0-beta.9'), greaterThan(0));
+      expect(compareVersions('0.5.0', '0.5.0-rc.1'), greaterThan(0));
+      expect(compareVersions('0.5.0-beta.1', '0.5.0'), lessThan(0));
+    });
+
+    test('build metadata does not affect precedence', () {
+      expect(compareVersions('0.5.0+10', '0.5.0+1'), 0);
     });
 
     test('malformed segments treated as zero', () {

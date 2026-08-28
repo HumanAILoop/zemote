@@ -11,6 +11,89 @@ import '../state/log_store.dart';
 import 'diff_view.dart';
 import 'markdown_view.dart';
 import 'theme.dart';
+import 'structured_data_view.dart';
+
+class PlanStep {
+  final String content;
+  final String status;
+
+  const PlanStep({required this.content, this.status = 'pending'});
+
+  bool get completed =>
+      status == 'completed' || status == 'done' || status == 'complete';
+}
+
+/// Extracts the latest plan from the live snapshot or plan-writing tool rows.
+List<PlanStep>? derivePlanSteps({
+  required List<Map<String, dynamic>> rows,
+  Object? snapshotPlan,
+}) {
+  final candidates = <Object?>[
+    snapshotPlan,
+    for (final row in rows.reversed)
+      if (_isPlanTool(row)) ...[
+        row['input'],
+        row['inputText'],
+        row['arguments'],
+        row['output'],
+      ],
+  ];
+  for (final candidate in candidates) {
+    final parsed = _parsePlanValue(candidate);
+    if (parsed != null && parsed.isNotEmpty) return parsed;
+  }
+  return null;
+}
+
+bool _isPlanTool(Map<String, dynamic> row) {
+  final name = '${row['toolName'] ?? row['name'] ?? ''}'.toLowerCase();
+  return name.contains('todowrite') ||
+      name.contains('todo_write') ||
+      name.contains('update_plan') ||
+      name.contains('update-plan');
+}
+
+List<PlanStep>? _parsePlanValue(Object? value) {
+  Object? decoded = value;
+  if (decoded is String) {
+    try {
+      decoded = jsonDecode(decoded);
+    } catch (_) {
+      return null;
+    }
+  }
+  if (decoded is Map) {
+    for (final key in const ['todos', 'plan', 'plans', 'steps', 'items']) {
+      final result = _parsePlanValue(decoded[key]);
+      if (result != null) return result;
+    }
+    return null;
+  }
+  if (decoded is! List) return null;
+  for (final item in decoded.reversed) {
+    if (item is Map) {
+      for (final key in const ['todos', 'plan', 'steps', 'items']) {
+        final nested = _parsePlanValue(item[key]);
+        if (nested != null) return nested;
+      }
+    }
+  }
+  final steps = <PlanStep>[];
+  for (final item in decoded) {
+    if (item is String && item.trim().isNotEmpty) {
+      steps.add(PlanStep(content: item.trim()));
+    } else if (item is Map) {
+      final content =
+          '${item['content'] ?? item['step'] ?? item['title'] ?? item['text'] ?? item['activeForm'] ?? item['label'] ?? ''}'
+              .trim();
+      if (content.isEmpty) continue;
+      final status =
+          '${item['status'] ?? (item['completed'] == true || item['done'] == true ? 'completed' : 'pending')}';
+      steps.add(PlanStep(content: content, status: status));
+    }
+  }
+  return steps.isEmpty ? null : steps;
+}
 
 /// Chat view for one task (session), backed by Conversation V4 subscription.
 /// Draft mode (no [sessionId]): the first message issues `createSession`.
@@ -94,6 +177,9 @@ class _ChatPageState extends State<ChatPage> {
   WorkspacePrep? _prep;
   List<SkillEntry> _skills = [];
   bool _skillsLoading = false;
+  Object? _planData;
+  bool _planLoading = false;
+  int _planRevision = -1;
 
   /// Draft-mode (no session yet) model/mode/thought selection, passed as
   /// `config` to createSession on first send.
@@ -172,12 +258,14 @@ class _ChatPageState extends State<ChatPage> {
       });
       sub.state.addListener(_scrollToBottom);
       sub.state.addListener(_dedupeEchoes);
+      sub.state.addListener(_refreshPlanIfNeeded);
       // The server snapshot is a tail window (can be as few as 3 rows).
       // The official client shows the full history immediately, so
       // auto-load the missing older rows once on open.
       if (sub.state.canLoadOlder) {
         await _loadOlder();
       }
+      _refreshPlanIfNeeded();
       // Initial snapshots and auto-loaded history can change the list height
       // over multiple frames. Force the first open to the newest message;
       // later streaming updates still use the conditional follow behavior.
@@ -713,14 +801,43 @@ class _ChatPageState extends State<ChatPage> {
     if (sessionId == null) return;
     try {
       final plans = await _transport.plans(sessionId);
+      if (mounted) setState(() => _planData = plans);
       if (!mounted) return;
       showModalBottomSheet(
         context: context,
-        builder: (context) => _JsonSheet(title: '计划', data: plans),
+        builder: (context) => _StructuredSheet(title: '计划', data: plans),
       );
     } catch (e) {
       _toast('获取计划失败: $e');
     }
+  }
+
+  Future<void> _loadPlanData(String sessionId) async {
+    if (_planLoading) return;
+    _planLoading = true;
+    try {
+      final plans = await _transport.plans(sessionId);
+      if (mounted) {
+        setState(() {
+          _planData = plans;
+          _planRevision = _state?.revision ?? _planRevision;
+        });
+      }
+    } catch (e) {
+      log('[chat] plans load failed: $e');
+    } finally {
+      _planLoading = false;
+    }
+  }
+
+  void _refreshPlanIfNeeded() {
+    final state = _state;
+    final sessionId = _sessionId;
+    if (state == null || sessionId == null || state.currentMode != 'plan') {
+      return;
+    }
+    if (_planRevision == state.revision || _planLoading) return;
+    _loadPlanData(sessionId);
   }
 
   @override
@@ -900,7 +1017,13 @@ class _ChatPageState extends State<ChatPage> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   _GoalBanner(state: state),
-                  _BackgroundWorksBar(state: state),
+                  _ConversationInsights(
+                    state: state,
+                    transport: _transport,
+                    sessionId: _sessionId ?? '',
+                    rpcPlan: _planData,
+                    onOpenPlan: _showPlansSheet,
+                  ),
                   _QueueBar(state: state, transport: _transport),
                   _PendingInteractions(state: state, transport: _transport),
                 ],
@@ -1317,7 +1440,7 @@ class _RowWidget extends StatelessWidget {
       if (!context.mounted) return;
       showModalBottomSheet(
         context: context,
-        builder: (context) => _JsonSheet(title: '文件变更', data: changes),
+        builder: (context) => _StructuredSheet(title: '文件变更', data: changes),
       );
     } catch (e) {
       if (context.mounted) {
@@ -1764,11 +1887,9 @@ class _ToolCallTile extends StatelessWidget {
   }
 
   Widget _kv(BuildContext context, String label, String value) {
-    // Pretty-print JSON input when possible (official shows structured view)
-    var display = value;
+    Object? structured;
     try {
-      final decoded = jsonDecode(value);
-      display = const JsonEncoder.withIndent('  ').convert(decoded);
+      structured = jsonDecode(value);
     } catch (_) {}
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
@@ -1778,23 +1899,24 @@ class _ToolCallTile extends StatelessWidget {
           Text(label,
               style: TextStyle(fontSize: 10.5, color: ZInk.faint(context))),
           const SizedBox(height: 2),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: ZInk.codeBlockBg(context),
-              borderRadius: BorderRadius.circular(8),
+          if (structured is Map || structured is List)
+            StructuredDataView(data: structured, maxDepth: 3)
+          else
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: ZInk.codeBlockBg(context),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: SelectableText(
+                value.length > 4000 ? '${value.substring(0, 4000)}…' : value,
+                style: TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 11,
+                    color: ZInk.solid(context)),
+              ),
             ),
-            child: SelectableText(
-              display.length > 4000
-                  ? '${display.substring(0, 4000)}…'
-                  : display,
-              style: TextStyle(
-                  fontFamily: 'monospace',
-                  fontSize: 11,
-                  color: ZInk.solid(context)),
-            ),
-          ),
         ],
       ),
     );
@@ -2105,6 +2227,368 @@ class _GoalBanner extends StatelessWidget {
   }
 }
 
+// ignore: unused_element
+class _PlanBanner extends StatelessWidget {
+  final ConversationState state;
+  final Object? rpcPlan;
+  final VoidCallback onOpenRaw;
+
+  const _PlanBanner({
+    required this.state,
+    required this.rpcPlan,
+    required this.onOpenRaw,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final steps = derivePlanSteps(
+      rows: state.rows,
+      snapshotPlan: state.plan ?? rpcPlan,
+    );
+    if ((steps == null || steps.isEmpty) && state.currentMode != 'plan') {
+      return const SizedBox.shrink();
+    }
+    final visibleSteps = steps ?? const <PlanStep>[];
+    final hasRawPlan = rpcPlan != null || state.plan != null;
+    final completed = visibleSteps.where((step) => step.completed).length;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(14, 4, 14, 0),
+      decoration: BoxDecoration(
+        color: ZInk.reasoningPanel(context),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: ZInk.reasoningBorder(context)),
+      ),
+      child: ExpansionTile(
+        initiallyExpanded: true,
+        shape: const Border(),
+        collapsedShape: const Border(),
+        leading: const Icon(Icons.account_tree_outlined,
+            color: ZColors.primary, size: 18),
+        title: Text(
+          visibleSteps.isEmpty
+              ? '计划模式'
+              : '执行计划 · $completed/${visibleSteps.length}',
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: ZInk.solid(context),
+          ),
+        ),
+        subtitle: visibleSteps.isEmpty
+            ? Text(hasRawPlan ? '计划数据已加载' : '等待计划内容…',
+                style: TextStyle(fontSize: 11, color: ZInk.muted(context)))
+            : null,
+        children: [
+          if (visibleSteps.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+              child: Column(
+                children: [
+                  for (final step in visibleSteps)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            step.completed
+                                ? Icons.check_circle
+                                : step.status == 'in_progress'
+                                    ? Icons.pending
+                                    : Icons.radio_button_unchecked,
+                            size: 16,
+                            color: step.completed
+                                ? ZColors.success
+                                : step.status == 'in_progress'
+                                    ? ZColors.running
+                                    : ZInk.muted(context),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              step.content,
+                              style: TextStyle(
+                                fontSize: 12,
+                                height: 1.4,
+                                color: ZInk.solid(context),
+                                decoration: step.completed
+                                    ? TextDecoration.lineThrough
+                                    : null,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: onOpenRaw,
+                      child: const Text('查看完整计划'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          if (visibleSteps.isEmpty && hasRawPlan)
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: onOpenRaw,
+                child: const Text('查看完整计划'),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ConversationInsights extends StatefulWidget {
+  final ConversationState state;
+  final ConversationTransport transport;
+  final String sessionId;
+  final Object? rpcPlan;
+  final VoidCallback onOpenPlan;
+
+  const _ConversationInsights({
+    required this.state,
+    required this.transport,
+    required this.sessionId,
+    required this.rpcPlan,
+    required this.onOpenPlan,
+  });
+
+  @override
+  State<_ConversationInsights> createState() => _ConversationInsightsState();
+}
+
+class _ConversationInsightsState extends State<_ConversationInsights> {
+  Object? _fileData;
+  bool _loadingFiles = false;
+
+  Future<void> _loadFiles() async {
+    if (_loadingFiles || widget.sessionId.isEmpty) return;
+    setState(() => _loadingFiles = true);
+    try {
+      final headers = widget.state.rows
+          .where((row) => row['kind'] == 'turnHeader')
+          .where((row) => row['state'] == 'completedSuccess')
+          .toList();
+      if (headers.isEmpty) return;
+      final row = headers.last;
+      final target = <String, dynamic>{
+        'rowId': row['rowId'],
+        if (row['entityId'] != null) 'entityId': row['entityId'],
+      };
+      final result = await widget.transport.fileChanges(
+        widget.sessionId,
+        target: target,
+        baseRevision: widget.state.revision,
+        baseLogEpoch: widget.state.logEpoch,
+      );
+      if (mounted) setState(() => _fileData = result);
+    } catch (e) {
+      if (mounted) setState(() => _fileData = {'error': '$e'});
+    } finally {
+      if (mounted) setState(() => _loadingFiles = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final steps = derivePlanSteps(
+      rows: widget.state.rows,
+      snapshotPlan: widget.state.plan ?? widget.rpcPlan,
+    );
+    final works = widget.state.backgroundWorks;
+    final hasPlan = (steps?.isNotEmpty ?? false) ||
+        widget.state.currentMode == 'plan' ||
+        widget.rpcPlan != null;
+    if (!hasPlan && works.isEmpty && _fileData == null) {
+      return const SizedBox.shrink();
+    }
+    return Container(
+      margin: const EdgeInsets.fromLTRB(14, 4, 14, 0),
+      decoration: BoxDecoration(
+        color: ZInk.panel(context),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: ZInk.panelBorder(context)),
+      ),
+      child: ExpansionTile(
+        initiallyExpanded: true,
+        shape: const Border(),
+        collapsedShape: const Border(),
+        leading: const Icon(Icons.dashboard_customize_outlined,
+            size: 18, color: ZColors.primary),
+        title: Text('会话工作台',
+            style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: ZInk.solid(context))),
+        children: [
+          if (hasPlan)
+            _InsightSection(
+              icon: Icons.account_tree_outlined,
+              title: '计划',
+              child: _PlanSummary(
+                steps: steps ?? const [],
+                isPlanMode: widget.state.currentMode == 'plan',
+                onOpenRaw: widget.onOpenPlan,
+              ),
+            ),
+          _InsightSection(
+            icon: Icons.difference_outlined,
+            title: '文件变更',
+            child: _FileSummary(
+              data: _fileData,
+              loading: _loadingFiles,
+              onLoad: _loadFiles,
+            ),
+          ),
+          if (works.isNotEmpty)
+            _InsightSection(
+              icon: Icons.pending_actions_outlined,
+              title: '后台任务 · ${works.length}',
+              child: Column(
+                children: [
+                  for (final work in works)
+                    ListTile(
+                      dense: true,
+                      leading: const Icon(Icons.sync, size: 16),
+                      title: Text('${work['title'] ?? work['kind'] ?? '后台任务'}',
+                          style: const TextStyle(fontSize: 12)),
+                      subtitle: Text('${work['status'] ?? '运行中'}',
+                          style: TextStyle(
+                              fontSize: 11, color: ZInk.muted(context))),
+                    ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InsightSection extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final Widget child;
+
+  const _InsightSection({
+    required this.icon,
+    required this.title,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(icon, size: 15, color: ZColors.primary),
+                const SizedBox(width: 6),
+                Text(title,
+                    style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: ZInk.solid(context))),
+              ],
+            ),
+            const SizedBox(height: 4),
+            child,
+          ],
+        ),
+      );
+}
+
+class _PlanSummary extends StatelessWidget {
+  final List<PlanStep> steps;
+  final bool isPlanMode;
+  final VoidCallback onOpenRaw;
+
+  const _PlanSummary({
+    required this.steps,
+    required this.isPlanMode,
+    required this.onOpenRaw,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (steps.isEmpty) {
+      return Row(
+        children: [
+          Expanded(
+              child: Text(isPlanMode ? '等待计划内容…' : '暂无计划步骤',
+                  style: TextStyle(fontSize: 11, color: ZInk.muted(context)))),
+          TextButton(onPressed: onOpenRaw, child: const Text('查看原始数据')),
+        ],
+      );
+    }
+    final done = steps.where((step) => step.completed).length;
+    return Column(
+      children: [
+        for (final step in steps)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 3),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                    step.completed
+                        ? Icons.check_circle
+                        : Icons.radio_button_unchecked,
+                    size: 15,
+                    color:
+                        step.completed ? ZColors.success : ZInk.muted(context)),
+                const SizedBox(width: 7),
+                Expanded(
+                    child: Text(step.content,
+                        style: TextStyle(
+                            fontSize: 12, color: ZInk.solid(context)))),
+              ],
+            ),
+          ),
+        Align(
+          alignment: Alignment.centerRight,
+          child: Text('$done/${steps.length} 已完成',
+              style: TextStyle(fontSize: 11, color: ZInk.muted(context))),
+        ),
+      ],
+    );
+  }
+}
+
+class _FileSummary extends StatelessWidget {
+  final Object? data;
+  final bool loading;
+  final VoidCallback onLoad;
+
+  const _FileSummary(
+      {required this.data, required this.loading, required this.onLoad});
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading) return const LinearProgressIndicator(minHeight: 2);
+    if (data == null) {
+      return Align(
+        alignment: Alignment.centerRight,
+        child: TextButton.icon(
+          onPressed: onLoad,
+          icon: const Icon(Icons.refresh, size: 15),
+          label: const Text('加载最近变更'),
+        ),
+      );
+    }
+    return StructuredDataView(data: data);
+  }
+}
+
+// ignore: unused_element
 class _BackgroundWorksBar extends StatelessWidget {
   final ConversationState state;
 
@@ -3108,7 +3592,7 @@ class _UsageSheet extends StatelessWidget {
                       showModalBottomSheet(
                         context: context,
                         builder: (context) =>
-                            _JsonSheet(title: '任务用量', data: res),
+                            _StructuredSheet(title: '任务用量', data: res),
                       );
                     }
                   } catch (e) {
@@ -3150,32 +3634,42 @@ class _UsageRow extends StatelessWidget {
   }
 }
 
-class _JsonSheet extends StatelessWidget {
+class _StructuredSheet extends StatelessWidget {
   final String title;
   final Object? data;
 
-  const _JsonSheet({required this.title, required this.data});
+  const _StructuredSheet({required this.title, required this.data});
 
   @override
   Widget build(BuildContext context) {
-    const encoder = JsonEncoder.withIndent('  ');
     return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
+      child: SizedBox(
+        height: MediaQuery.sizeOf(context).height * 0.8,
         child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(title,
-                style:
-                    const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 12),
-            Flexible(
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 8, 8, 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(title,
+                        style: const TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.w600)),
+                  ),
+                  IconButton(
+                    tooltip: '查看原始数据',
+                    icon: const Icon(Icons.data_object, size: 18),
+                    onPressed: () => showRawDataDialog(context,
+                        title: '$title · 原始数据', data: data),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Expanded(
               child: SingleChildScrollView(
-                child: SelectableText(
-                  data == null ? '（无数据）' : encoder.convert(data),
-                  style: const TextStyle(fontFamily: 'monospace', fontSize: 11),
-                ),
+                padding: const EdgeInsets.all(16),
+                child: StructuredDataView(data: data),
               ),
             ),
           ],

@@ -12,6 +12,7 @@ import 'ui/theme.dart';
 import 'ui/ui_settings.dart';
 import 'update/update_checker.dart';
 import 'update/update_dialog.dart';
+import 'update/update_channel.dart';
 import 'notifications/notifications.dart';
 
 final navigatorKey = GlobalKey<NavigatorState>();
@@ -63,7 +64,9 @@ class _ZemoteAppState extends State<ZemoteApp> {
   /// exists; Android builds can download + install the APK in-app.
   Future<void> _checkForUpdates() async {
     try {
-      final info = await checkForUpdates();
+      await updateChannelSettings.load();
+      final info = await checkForUpdates(
+          includePrerelease: updateChannelSettings.receiveBetaUpdates);
       if (!info.isNewer) return;
       final context = navigatorKey.currentContext;
       if (context == null || !context.mounted) return;
@@ -91,8 +94,7 @@ class _ZemoteAppState extends State<ZemoteApp> {
             home: AccountsPage(store: _store, session: _session),
             builder: (context, child) => MediaQuery(
               data: MediaQuery.of(context).copyWith(
-                textScaler:
-                    TextScaler.linear(_uiSettings.textScale),
+                textScaler: TextScaler.linear(_uiSettings.textScale),
               ),
               child: child ?? const SizedBox.shrink(),
             ),

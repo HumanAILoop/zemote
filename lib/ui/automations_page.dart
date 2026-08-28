@@ -4,6 +4,7 @@ import '../protocol/automation_client.dart';
 import '../protocol/conversation.dart';
 import '../protocol/zemote_client.dart';
 import 'theme.dart';
+import 'structured_data_view.dart';
 
 /// Scheduled-task (automation) management for a workspace.
 class AutomationsPage extends StatefulWidget {
@@ -58,8 +59,7 @@ class _AutomationsPageState extends State<AutomationsPage> {
 
   void _toast(String msg) {
     if (mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(msg)));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
     }
   }
 
@@ -102,13 +102,12 @@ class _AutomationsPageState extends State<AutomationsPage> {
                       child: ListView.separated(
                         padding: const EdgeInsets.all(16),
                         itemCount: _items.length,
-                        separatorBuilder: (_, __) =>
-                            const SizedBox(height: 12),
+                        separatorBuilder: (_, __) => const SizedBox(height: 12),
                         itemBuilder: (context, i) => _AutomationTile(
                           entry: _items[i],
                           onToggle: (enabled) => _run(
-                            () =>
-                                _client.setEnabled(_items[i].automationId, enabled),
+                            () => _client.setEnabled(
+                                _items[i].automationId, enabled),
                             '设置失败',
                           ),
                           onRunNow: () => _run(
@@ -189,76 +188,103 @@ class _AutomationTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: ZInk.tileBorder(context)),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(
-                e.recurring
-                    ? Icons.repeat
-                    : Icons.schedule_outlined,
-                size: 16,
-                color: e.enabled ? ZColors.primary : ZInk.faint(context),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(14),
+        onTap: () => _showDetails(context, e),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  e.recurring ? Icons.repeat : Icons.schedule_outlined,
+                  size: 16,
+                  color: e.enabled ? ZColors.primary : ZInk.faint(context),
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    e.title.isEmpty ? '未命名任务' : e.title,
+                    style: const TextStyle(
+                        fontSize: 14, fontWeight: FontWeight.w600),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Switch(
+                  value: e.enabled,
+                  onChanged: onToggle,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                Text(
+                  e.scheduleLabel(),
+                  style: TextStyle(fontSize: 12, color: ZInk.muted(context)),
+                ),
+                const SizedBox(width: 10),
+                _StatusChip(entry: e),
+                const Spacer(),
+                PopupMenuButton<String>(
+                  icon: Icon(Icons.more_vert,
+                      size: 18, color: ZInk.muted(context)),
+                  onSelected: (v) {
+                    if (v == 'runNow') onRunNow();
+                    if (v == 'restart') onRestart();
+                    if (v == 'delete') onDelete();
+                  },
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: 'runNow', child: Text('立即执行')),
+                    PopupMenuItem(value: 'restart', child: Text('重启')),
+                    PopupMenuItem(value: 'delete', child: Text('删除')),
+                  ],
+                ),
+              ],
+            ),
+            if (e.runCount > 0 || e.lastRunAt > 0 || e.nextRunAt != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
                 child: Text(
-                  e.title.isEmpty ? '未命名任务' : e.title,
-                  style: const TextStyle(
-                      fontSize: 14, fontWeight: FontWeight.w600),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                  [
+                    if (e.runCount > 0) '已运行 ${e.runCount} 次',
+                    if (e.nextRunAt != null && e.enabled)
+                      '下次 ${relativeTime(e.nextRunAt)}',
+                    if (e.lastRunAt > 0) '上次 ${relativeTime(e.lastRunAt)}',
+                  ].join(' · '),
+                  style: TextStyle(fontSize: 11, color: ZInk.faint(context)),
                 ),
               ),
-              Switch(
-                value: e.enabled,
-                onChanged: onToggle,
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              Text(
-                e.scheduleLabel(),
-                style: TextStyle(fontSize: 12, color: ZInk.muted(context)),
-              ),
-              const SizedBox(width: 10),
-              _StatusChip(entry: e),
-              const Spacer(),
-              PopupMenuButton<String>(
-                icon: Icon(Icons.more_vert,
-                    size: 18, color: ZInk.muted(context)),
-                onSelected: (v) {
-                  if (v == 'runNow') onRunNow();
-                  if (v == 'restart') onRestart();
-                  if (v == 'delete') onDelete();
-                },
-                itemBuilder: (_) => const [
-                  PopupMenuItem(value: 'runNow', child: Text('立即执行')),
-                  PopupMenuItem(value: 'restart', child: Text('重启')),
-                  PopupMenuItem(value: 'delete', child: Text('删除')),
-                ],
-              ),
-            ],
-          ),
-          if (e.runCount > 0 || e.lastRunAt > 0 || e.nextRunAt != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Text(
-                [
-                  if (e.runCount > 0) '已运行 ${e.runCount} 次',
-                  if (e.nextRunAt != null && e.enabled)
-                    '下次 ${relativeTime(e.nextRunAt)}',
-                  if (e.lastRunAt > 0) '上次 ${relativeTime(e.lastRunAt)}',
-                ].join(' · '),
-                style: TextStyle(fontSize: 11, color: ZInk.faint(context)),
-              ),
-            ),
-        ],
+          ],
+        ),
       ),
+    );
+  }
+
+  void _showDetails(BuildContext context, AutomationEntry entry) {
+    final history = entry.raw['history'] ??
+        entry.raw['runs'] ??
+        entry.raw['executions'] ??
+        entry.raw['runHistory'];
+    showStructuredDataSheet(
+      context,
+      title: entry.title.isEmpty ? '自动化详情' : entry.title,
+      data: {
+        'status': entry.lifecycleStatus,
+        'enabled': entry.enabled,
+        'schedule': entry.scheduleLabel(),
+        'prompt': entry.prompt,
+        'provider': entry.provider,
+        'model': entry.model,
+        'mode': entry.mode,
+        'thoughtLevel': entry.thoughtLevel,
+        'runCount': entry.runCount,
+        if (entry.lastRunAt > 0) 'lastRunAt': entry.lastRunAt,
+        if (entry.nextRunAt != null) 'nextRunAt': entry.nextRunAt,
+        if (history != null) 'history': history,
+      },
     );
   }
 }
@@ -298,8 +324,7 @@ class _EmptyState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.schedule_outlined,
-              size: 48, color: ZInk.ghost(context)),
+          Icon(Icons.schedule_outlined, size: 48, color: ZInk.ghost(context)),
           const SizedBox(height: 12),
           Text('还没有定时任务',
               style: TextStyle(fontSize: 14, color: ZInk.muted(context))),
@@ -343,12 +368,10 @@ class _CreateAutomationSheet extends StatefulWidget {
   final BridgeSession session;
   final Map<String, dynamic> scope;
 
-  const _CreateAutomationSheet(
-      {required this.session, required this.scope});
+  const _CreateAutomationSheet({required this.session, required this.scope});
 
   @override
-  State<_CreateAutomationSheet> createState() =>
-      _CreateAutomationSheetState();
+  State<_CreateAutomationSheet> createState() => _CreateAutomationSheetState();
 }
 
 class _CreateAutomationSheetState extends State<_CreateAutomationSheet> {
@@ -369,9 +392,8 @@ class _CreateAutomationSheetState extends State<_CreateAutomationSheet> {
 
   Future<void> _loadPrep() async {
     try {
-      final prep = await widget.session
-          .conversation(widget.scope)
-          .prepareWorkspace();
+      final prep =
+          await widget.session.conversation(widget.scope).prepareWorkspace();
       if (mounted) setState(() => _prep = prep);
     } catch (_) {}
   }
@@ -433,7 +455,8 @@ class _CreateAutomationSheetState extends State<_CreateAutomationSheet> {
       final prep = _prep;
       final modelOpt = prep?.option('model');
       final thoughtOpt = prep?.option('thought_level');
-      final modelValue = '${modelOpt?.currentValue ?? 'builtin:zai-coding-plan/GLM-5.2'}';
+      final modelValue =
+          '${modelOpt?.currentValue ?? 'builtin:zai-coding-plan/GLM-5.2'}';
       final idx = modelValue.lastIndexOf('/');
       final client_ = await client.create(
         title: title,
@@ -557,8 +580,7 @@ class _CreateAutomationSheetState extends State<_CreateAutomationSheet> {
             if (_error != null) ...[
               const SizedBox(height: 8),
               Text(_error!,
-                  style: const TextStyle(
-                      fontSize: 12, color: ZColors.danger)),
+                  style: const TextStyle(fontSize: 12, color: ZColors.danger)),
             ],
             const SizedBox(height: 16),
             SizedBox(

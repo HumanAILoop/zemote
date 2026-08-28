@@ -7,7 +7,9 @@ import '../protocol/zemote_client.dart';
 import '../update/app_version.dart';
 import '../update/update_checker.dart';
 import '../update/update_dialog.dart';
+import '../update/update_channel.dart';
 import 'channel_explorer_page.dart';
+import 'diagnostics_page.dart';
 import 'log_page.dart';
 import 'model_providers_page.dart';
 import 'rpc_explorer_page.dart';
@@ -45,8 +47,7 @@ class SettingsPage extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       children: [
         Text(tr(context, 'settings.title'),
-            style: const TextStyle(
-                fontSize: 22, fontWeight: FontWeight.w700)),
+            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
         const SizedBox(height: 20),
         Card(
           child: ListTile(
@@ -76,7 +77,8 @@ class SettingsPage extends StatelessWidget {
                       segments: [
                         ButtonSegment(
                             value: ThemeMode.dark,
-                            icon: const Icon(Icons.dark_mode_outlined, size: 16),
+                            icon:
+                                const Icon(Icons.dark_mode_outlined, size: 16),
                             label: Text(tr(context, 'settings.theme.dark'),
                                 style: const TextStyle(fontSize: 12))),
                         ButtonSegment(
@@ -97,8 +99,8 @@ class SettingsPage extends StatelessWidget {
                           controller.setMode(modes.first),
                       style: const ButtonStyle(
                         visualDensity: VisualDensity.compact,
-                        textStyle: WidgetStatePropertyAll(
-                            TextStyle(fontSize: 12)),
+                        textStyle:
+                            WidgetStatePropertyAll(TextStyle(fontSize: 12)),
                         iconSize: WidgetStatePropertyAll(16),
                       ),
                     ),
@@ -110,13 +112,12 @@ class SettingsPage extends StatelessWidget {
                     const SizedBox(height: 8),
                     AnimatedBuilder(
                       animation: ui,
-                      builder: (context, _) =>
-                          SegmentedButton<String>(
+                      builder: (context, _) => SegmentedButton<String>(
                         segments: const [
                           ButtonSegment(
                               value: 'zh-CN',
-                              label: Text('中文',
-                                  style: TextStyle(fontSize: 12))),
+                              label:
+                                  Text('中文', style: TextStyle(fontSize: 12))),
                           ButtonSegment(
                               value: 'en-US',
                               label: Text('English',
@@ -126,8 +127,8 @@ class SettingsPage extends StatelessWidget {
                         onSelectionChanged: (v) => ui.setLocale(v.first),
                         style: const ButtonStyle(
                           visualDensity: VisualDensity.compact,
-                          textStyle: WidgetStatePropertyAll(
-                              TextStyle(fontSize: 12)),
+                          textStyle:
+                              WidgetStatePropertyAll(TextStyle(fontSize: 12)),
                         ),
                       ),
                     ),
@@ -167,17 +168,33 @@ class SettingsPage extends StatelessWidget {
         Card(
           child: Column(
             children: [
-               ListTile(
+              ListTile(
                 leading: const Icon(Icons.terminal, size: 20),
                 title: const Text('协议日志'),
                 subtitle: const Text('查看 relay / IPC / V4 帧日志',
                     style: TextStyle(fontSize: 12)),
                 trailing: const Icon(Icons.chevron_right),
-                 onTap: () => Navigator.of(context).push(
-                     MaterialPageRoute(builder: (_) => const LogPage())),
-               ),
-               _VerboseFramesSetting(),
-               if (client != null) ...[
+                onTap: () => Navigator.of(context)
+                    .push(MaterialPageRoute(builder: (_) => const LogPage())),
+              ),
+              _VerboseFramesSetting(),
+              const Divider(indent: 52),
+              ListTile(
+                leading: const Icon(Icons.health_and_safety_outlined, size: 20),
+                title: const Text('诊断中心'),
+                subtitle: const Text('连接状态、订阅状态和故障记录',
+                    style: TextStyle(fontSize: 12)),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => DiagnosticsPage(
+                      client: client,
+                      bridge: bridge,
+                    ),
+                  ),
+                ),
+              ),
+              if (client != null) ...[
                 const Divider(indent: 52),
                 ListTile(
                   leading: const Icon(Icons.bug_report_outlined, size: 20),
@@ -185,10 +202,8 @@ class SettingsPage extends StatelessWidget {
                   subtitle: const Text('发送原始 relay payload',
                       style: TextStyle(fontSize: 12)),
                   trailing: const Icon(Icons.chevron_right),
-                  onTap: () => Navigator.of(context)
-                      .push(MaterialPageRoute(
-                          builder: (_) =>
-                              RpcExplorerPage(client: client!))),
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => RpcExplorerPage(client: client!))),
                 ),
               ],
               if (bridge != null) ...[
@@ -199,12 +214,11 @@ class SettingsPage extends StatelessWidget {
                   subtitle: const Text('插件 / 定时任务 / MCP / Skills',
                       style: TextStyle(fontSize: 12)),
                   trailing: const Icon(Icons.chevron_right),
-                  onTap: () => Navigator.of(context)
-                      .push(MaterialPageRoute(
-                          builder: (_) => ServicesPage(
-                                session: bridge!,
-                                scope: _scopeOf(bridge!),
-                              ))),
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => ServicesPage(
+                            session: bridge!,
+                            scope: _scopeOf(bridge!),
+                          ))),
                 ),
                 const Divider(indent: 52),
                 ListTile(
@@ -213,10 +227,8 @@ class SettingsPage extends StatelessWidget {
                   subtitle: const Text('额度 / 配额限制 / 订阅详情',
                       style: TextStyle(fontSize: 12)),
                   trailing: const Icon(Icons.chevron_right),
-                  onTap: () => Navigator.of(context)
-                      .push(MaterialPageRoute(
-                          builder: (_) =>
-                              UsagePage(session: bridge!))),
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => UsagePage(session: bridge!))),
                 ),
                 const Divider(indent: 52),
                 ListTile(
@@ -225,10 +237,8 @@ class SettingsPage extends StatelessWidget {
                   subtitle: const Text('添加 / 启停 / 删除模型供应商',
                       style: TextStyle(fontSize: 12)),
                   trailing: const Icon(Icons.chevron_right),
-                  onTap: () => Navigator.of(context)
-                      .push(MaterialPageRoute(
-                          builder: (_) =>
-                              ModelProvidersPage(session: bridge!))),
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => ModelProvidersPage(session: bridge!))),
                 ),
                 const Divider(indent: 52),
                 ListTile(
@@ -238,10 +248,8 @@ class SettingsPage extends StatelessWidget {
                       '调用任意 channel 方法（zcode-task / skills / mcp …）',
                       style: TextStyle(fontSize: 12)),
                   trailing: const Icon(Icons.chevron_right),
-                  onTap: () => Navigator.of(context)
-                      .push(MaterialPageRoute(
-                          builder: (_) =>
-                              ChannelExplorerPage(session: bridge!))),
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => ChannelExplorerPage(session: bridge!))),
                 ),
               ],
             ],
@@ -252,8 +260,8 @@ class SettingsPage extends StatelessWidget {
           child: ListTile(
             leading:
                 const Icon(Icons.link_off, color: ZColors.danger, size: 20),
-            title: const Text('断开当前设备',
-                style: TextStyle(color: ZColors.danger)),
+            title:
+                const Text('断开当前设备', style: TextStyle(color: ZColors.danger)),
             onTap: onDisconnect,
           ),
         ),
@@ -265,7 +273,8 @@ class SettingsPage extends StatelessWidget {
         const SizedBox(height: 6),
         Center(
           child: InkWell(
-            onTap: () => _copyUrl(context, 'https://github.com/HumanAILoop/zemote'),
+            onTap: () =>
+                _copyUrl(context, 'https://github.com/HumanAILoop/zemote'),
             child: Text(
               'GitHub: https://github.com/HumanAILoop/zemote',
               style: TextStyle(
@@ -311,14 +320,15 @@ class SettingsPage extends StatelessWidget {
       ),
     );
     try {
-      final info = await checkForUpdates();
+      final info = await checkForUpdates(
+          includePrerelease: updateChannelSettings.receiveBetaUpdates);
       if (!context.mounted) return;
       Navigator.of(context).pop(); // close the spinner
       if (info.isNewer) {
         await showUpdateDialog(context, info);
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('已是最新版本 v$appVersion')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('已是最新版本 v$appVersion')));
       }
     } catch (e) {
       if (!context.mounted) return;
@@ -339,8 +349,8 @@ class _VerboseFramesSettingState extends State<_VerboseFramesSetting> {
   Widget build(BuildContext context) => SwitchListTile(
         secondary: const Icon(Icons.article_outlined, size: 20),
         title: const Text('协议帧日志（详细）'),
-        subtitle: const Text('记录完整 relay 帧，可能包含敏感数据',
-            style: TextStyle(fontSize: 12)),
+        subtitle:
+            const Text('记录完整 relay 帧，可能包含敏感数据', style: TextStyle(fontSize: 12)),
         value: RelayClient.verboseFrames,
         onChanged: (value) async {
           RelayClient.verboseFrames = value;
@@ -348,5 +358,56 @@ class _VerboseFramesSettingState extends State<_VerboseFramesSetting> {
           final prefs = await SharedPreferences.getInstance();
           await prefs.setBool('relayVerboseFrames', value);
         },
+      );
+}
+
+class _BetaUpdateSetting extends StatefulWidget {
+  const _BetaUpdateSetting();
+
+  @override
+  State<_BetaUpdateSetting> createState() => _BetaUpdateSettingState();
+}
+
+class _BetaUpdateSettingState extends State<_BetaUpdateSetting> {
+  final _settings = updateChannelSettings;
+  bool _loading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    await _settings.load();
+    if (mounted) setState(() => _loading = false);
+  }
+
+  @override
+  Widget build(BuildContext context) => Card(
+        child: SwitchListTile(
+          secondary: Icon(
+            _settings.receiveBetaUpdates
+                ? Icons.science
+                : Icons.verified_outlined,
+            size: 20,
+          ),
+          title: const Text('接收 Beta 更新'),
+          subtitle: Text(
+            _loading
+                ? '正在读取更新通道…'
+                : _settings.receiveBetaUpdates
+                    ? '当前通道：稳定版 + Beta 版'
+                    : '当前通道：稳定版（推荐）',
+            style: const TextStyle(fontSize: 12),
+          ),
+          value: !_loading && _settings.receiveBetaUpdates,
+          onChanged: _loading
+              ? null
+              : (value) async {
+                  setState(() => _settings.receiveBetaUpdates = value);
+                  await _settings.setReceiveBetaUpdates(value);
+                },
+        ),
       );
 }

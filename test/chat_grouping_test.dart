@@ -3,6 +3,42 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zemote/ui/chat_page.dart';
 
 void main() {
+  test('derivePlanSteps parses snapshot plans and nested steps', () {
+    final steps = derivePlanSteps(
+      rows: const [],
+      snapshotPlan: {
+        'plans': [
+          {
+            'steps': [
+              {'title': '检查配置', 'status': 'completed'},
+              {'content': '执行修改', 'status': 'in_progress'},
+            ],
+          },
+        ],
+      },
+    );
+
+    expect(steps, hasLength(2));
+    expect(steps![0].content, '检查配置');
+    expect(steps[0].completed, isTrue);
+    expect(steps[1].status, 'in_progress');
+  });
+
+  test('derivePlanSteps parses JSON from plan tool input', () {
+    final steps = derivePlanSteps(
+      rows: [
+        {
+          'kind': 'toolCall',
+          'toolName': 'update_plan',
+          'inputText': '{"plan":[{"step":"写测试","status":"pending"}]}',
+        },
+      ],
+    );
+
+    expect(steps, hasLength(1));
+    expect(steps!.single.content, '写测试');
+  });
+
   test('duplicate text confirmations retire echoes one at a time', () {
     final List<Map<String, dynamic>> echoes = [
       {'text': 'same', 'status': 'sent'},
