@@ -60,6 +60,8 @@ class SettingsPage extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
+        const _BetaUpdateSetting(),
+        const SizedBox(height: 12),
         if (controller != null)
           Card(
             child: Padding(

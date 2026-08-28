@@ -2405,102 +2405,200 @@ class _ConversationInsightsState extends State<_ConversationInsights> {
     final hasPlan = (steps?.isNotEmpty ?? false) ||
         widget.state.currentMode == 'plan' ||
         widget.rpcPlan != null;
-    if (!hasPlan && works.isEmpty && _fileData == null) {
-      return const SizedBox.shrink();
-    }
+    final fileSummary = summarizeFileChanges(_fileData);
+    final completed = steps?.where((step) => step.completed).length ?? 0;
     return Container(
-      margin: const EdgeInsets.fromLTRB(14, 4, 14, 0),
+      margin: const EdgeInsets.fromLTRB(14, 5, 14, 4),
+      padding: const EdgeInsets.fromLTRB(12, 9, 8, 9),
       decoration: BoxDecoration(
         color: ZInk.panel(context),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: ZInk.panelBorder(context)),
       ),
-      child: ExpansionTile(
-        initiallyExpanded: true,
-        shape: const Border(),
-        collapsedShape: const Border(),
-        leading: const Icon(Icons.dashboard_customize_outlined,
-            size: 18, color: ZColors.primary),
-        title: Text('会话工作台',
-            style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: ZInk.solid(context))),
+      child: Row(
         children: [
-          if (hasPlan)
-            _InsightSection(
-              icon: Icons.account_tree_outlined,
-              title: '计划',
-              child: _PlanSummary(
-                steps: steps ?? const [],
-                isPlanMode: widget.state.currentMode == 'plan',
-                onOpenRaw: widget.onOpenPlan,
-              ),
+          Container(
+            width: 30,
+            height: 30,
+            decoration: BoxDecoration(
+              color: ZColors.primary.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(9),
             ),
-          _InsightSection(
-            icon: Icons.difference_outlined,
-            title: '文件变更',
-            child: _FileSummary(
-              data: _fileData,
-              loading: _loadingFiles,
-              onLoad: _loadFiles,
+            child: const Icon(Icons.dashboard_customize_outlined,
+                size: 17, color: ZColors.primary),
+          ),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('会话工作台',
+                    style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                        color: ZInk.solid(context))),
+                const SizedBox(height: 2),
+                Text(
+                  [
+                    hasPlan ? '计划 $completed/${steps?.length ?? 0}' : '暂无计划',
+                    fileSummary == null
+                        ? '文件未检查'
+                        : '文件 ${fileSummary.files} · +${fileSummary.additions} / -${fileSummary.deletions}',
+                    works.isEmpty ? '无后台任务' : '${works.length} 个后台任务',
+                  ].join(' · '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(fontSize: 10.5, color: ZInk.muted(context)),
+                ),
+              ],
             ),
           ),
-          if (works.isNotEmpty)
-            _InsightSection(
-              icon: Icons.pending_actions_outlined,
-              title: '后台任务 · ${works.length}',
-              child: Column(
-                children: [
-                  for (final work in works)
-                    ListTile(
-                      dense: true,
-                      leading: const Icon(Icons.sync, size: 16),
-                      title: Text('${work['title'] ?? work['kind'] ?? '后台任务'}',
-                          style: const TextStyle(fontSize: 12)),
-                      subtitle: Text('${work['status'] ?? '运行中'}',
-                          style: TextStyle(
-                              fontSize: 11, color: ZInk.muted(context))),
-                    ),
+          _WorkbenchAction(
+            tooltip: '计划',
+            icon: Icons.account_tree_outlined,
+            active: hasPlan,
+            badge: steps?.isNotEmpty == true ? '${steps!.length}' : null,
+            onTap: () => _openWorkbench(context, 0, steps ?? const [], works),
+          ),
+          _WorkbenchAction(
+            tooltip: '文件变更',
+            icon: Icons.difference_outlined,
+            active: fileSummary != null && fileSummary.files > 0,
+            loading: _loadingFiles,
+            badge: fileSummary == null ? null : '${fileSummary.files}',
+            onTap: () => _openFiles(context, steps ?? const [], works),
+          ),
+          _WorkbenchAction(
+            tooltip: '后台任务',
+            icon: Icons.pending_actions_outlined,
+            active: works.isNotEmpty,
+            badge: works.isEmpty ? null : '${works.length}',
+            onTap: () => _openWorkbench(context, 2, steps ?? const [], works),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openFiles(BuildContext context, List<PlanStep> steps,
+      List<Map<String, dynamic>> works) async {
+    if (_fileData == null) await _loadFiles();
+    if (context.mounted) _openWorkbench(context, 1, steps, works);
+  }
+
+  void _openWorkbench(BuildContext context, int index, List<PlanStep> steps,
+      List<Map<String, dynamic>> works) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (context) => DefaultTabController(
+        length: 3,
+        initialIndex: index,
+        child: FractionallySizedBox(
+          heightFactor: 0.72,
+          child: Column(
+            children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text('会话工作台',
+                      style:
+                          TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                ),
+              ),
+              const TabBar(
+                tabs: [
+                  Tab(text: '计划'),
+                  Tab(text: '文件'),
+                  Tab(text: '后台任务'),
                 ],
               ),
-            ),
-        ],
+              Expanded(
+                child: TabBarView(
+                  children: [
+                    SingleChildScrollView(
+                      padding: const EdgeInsets.all(16),
+                      child: _PlanSummary(
+                        steps: steps,
+                        isPlanMode: widget.state.currentMode == 'plan',
+                        onOpenRaw: widget.onOpenPlan,
+                      ),
+                    ),
+                    SingleChildScrollView(
+                      padding: const EdgeInsets.all(16),
+                      child: _FileSummary(
+                        data: _fileData,
+                        loading: _loadingFiles,
+                        onLoad: () async {
+                          Navigator.pop(context);
+                          await _openFiles(this.context, steps, works);
+                        },
+                      ),
+                    ),
+                    _BackgroundWorkList(works: works),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
 }
 
-class _InsightSection extends StatelessWidget {
+class _WorkbenchAction extends StatelessWidget {
+  final String tooltip;
   final IconData icon;
-  final String title;
-  final Widget child;
+  final bool active;
+  final bool loading;
+  final String? badge;
+  final VoidCallback onTap;
 
-  const _InsightSection({
+  const _WorkbenchAction({
+    required this.tooltip,
     required this.icon,
-    required this.title,
-    required this.child,
+    required this.active,
+    required this.onTap,
+    this.loading = false,
+    this.badge,
   });
 
   @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+  Widget build(BuildContext context) => Tooltip(
+        message: tooltip,
+        child: Stack(
+          clipBehavior: Clip.none,
           children: [
-            Row(
-              children: [
-                Icon(icon, size: 15, color: ZColors.primary),
-                const SizedBox(width: 6),
-                Text(title,
-                    style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: ZInk.solid(context))),
-              ],
+            IconButton(
+              visualDensity: VisualDensity.compact,
+              onPressed: onTap,
+              icon: loading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 1.7),
+                    )
+                  : Icon(icon,
+                      size: 19,
+                      color: active ? ZColors.primary : ZInk.muted(context)),
             ),
-            const SizedBox(height: 4),
-            child,
+            if (badge != null)
+              Positioned(
+                right: 2,
+                top: 1,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  decoration: BoxDecoration(
+                    color: active ? ZColors.primary : ZInk.faint(context),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(badge!,
+                      style: const TextStyle(fontSize: 8, color: Colors.white)),
+                ),
+              ),
           ],
         ),
       );
@@ -2585,6 +2683,70 @@ class _FileSummary extends StatelessWidget {
       );
     }
     return StructuredDataView(data: data);
+  }
+}
+
+class FileChangeSummary {
+  final int files;
+  final int additions;
+  final int deletions;
+
+  const FileChangeSummary({
+    required this.files,
+    required this.additions,
+    required this.deletions,
+  });
+}
+
+FileChangeSummary? summarizeFileChanges(Object? data) {
+  if (data is! Map) return null;
+  final files = data['files'] is List
+      ? (data['files'] as List).length
+      : data['items'] is List
+          ? (data['items'] as List).length
+          : 0;
+  final additions = (data['additions'] as num?)?.toInt() ?? 0;
+  final deletions = (data['deletions'] as num?)?.toInt() ?? 0;
+  return FileChangeSummary(
+      files: files, additions: additions, deletions: deletions);
+}
+
+class _BackgroundWorkList extends StatelessWidget {
+  final List<Map<String, dynamic>> works;
+
+  const _BackgroundWorkList({required this.works});
+
+  @override
+  Widget build(BuildContext context) {
+    if (works.isEmpty) {
+      return Center(
+        child: Text('当前没有后台任务',
+            style: TextStyle(fontSize: 12, color: ZInk.muted(context))),
+      );
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.all(16),
+      itemCount: works.length,
+      separatorBuilder: (_, __) => const Divider(height: 1),
+      itemBuilder: (context, index) {
+        final work = works[index];
+        final status = '${work['status'] ?? '运行中'}';
+        final running = status == 'running' || status == 'in_progress';
+        return ListTile(
+          contentPadding: EdgeInsets.zero,
+          leading: Icon(running ? Icons.sync : Icons.task_alt,
+              size: 19, color: running ? ZColors.primary : ZColors.success),
+          title: Text('${work['title'] ?? work['kind'] ?? '后台任务'}',
+              style: const TextStyle(fontSize: 13)),
+          subtitle: Text(status,
+              style: TextStyle(fontSize: 11, color: ZInk.muted(context))),
+          trailing: work['progress'] is num
+              ? Text('${((work['progress'] as num) * 100).round()}%',
+                  style: TextStyle(fontSize: 11, color: ZInk.muted(context)))
+              : null,
+        );
+      },
+    );
   }
 }
 

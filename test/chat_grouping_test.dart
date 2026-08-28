@@ -3,6 +3,17 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zemote/ui/chat_page.dart';
 
 void main() {
+  test('summarizeFileChanges counts files and line changes', () {
+    final summary = summarizeFileChanges({
+      'files': ['a.dart', 'b.dart'],
+      'additions': 12,
+      'deletions': 4,
+    });
+    expect(summary?.files, 2);
+    expect(summary?.additions, 12);
+    expect(summary?.deletions, 4);
+  });
+
   test('derivePlanSteps parses snapshot plans and nested steps', () {
     final steps = derivePlanSteps(
       rows: const [],

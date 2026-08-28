@@ -2,6 +2,17 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [0.5.1-beta.1] - 2026-08-28
+
+### Added
+- 会话工作台改为紧凑状态总览条，减少对聊天内容的占用。
+- 计划、文件变更和后台任务改为底部标签面板，支持快速切换查看。
+- 文件变更摘要显示文件数量、新增行和删除行。
+- 设置页显示“接收 Beta 更新”开关，可选择稳定版或稳定版 + Beta 版通道。
+
+### Fixed
+- 修复 Beta 更新开关已实现但未加入设置页导致用户不可见的问题。
+
 ## [0.5.0] - 2026-08-28
 
 ### Added
