@@ -8,6 +8,11 @@ import 'package:zemote/protocol/zemote_client.dart';
 
 void main() {
   test('read-only real feature probe', () async {
+    const runReal = bool.fromEnvironment('ZEMOTE_RUN_REAL_TESTS');
+    if (!runReal) {
+      print('SKIP: real tests disabled.');
+      return;
+    }
     final url = _readUrl();
     final params = url.isEmpty ? null : ZemoteConnectionParams.parse(url);
     if (params == null) {

@@ -17,6 +17,7 @@ import 'services_page.dart';
 import 'theme.dart';
 import 'ui_settings.dart';
 import 'usage_page.dart';
+import 'voice_models_page.dart';
 
 /// Builds a `{workspacePath, workspaceIdentity?}` scope from a bridge.
 Map<String, dynamic> _scopeOf(BridgeSession session) => {
@@ -61,6 +62,18 @@ class SettingsPage extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         const _BetaUpdateSetting(),
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.mic_none_outlined, size: 20),
+            title: const Text('离线语音输入'),
+            subtitle:
+                const Text('下载、启用和管理本地语音识别模型', style: TextStyle(fontSize: 12)),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const VoiceModelsPage()),
+            ),
+          ),
+        ),
         const SizedBox(height: 12),
         if (controller != null)
           Card(

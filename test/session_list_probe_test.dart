@@ -9,6 +9,8 @@ import 'package:zemote/ui/task_home_page.dart';
 
 void main() {
   test('read-only real session list probe', () async {
+    const runReal = bool.fromEnvironment('ZEMOTE_RUN_REAL_TESTS');
+    if (!runReal) return;
     const encodedUrl = String.fromEnvironment('ZEMOTE_PROBE_URL_B64');
     if (encodedUrl.isEmpty) return;
     final url = utf8.decode(base64.decode(encodedUrl));

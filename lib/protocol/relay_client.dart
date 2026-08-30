@@ -63,13 +63,14 @@ class RelayClient {
 
   WebSocketChannel? _socket;
   StreamSubscription? _socketSub;
+  int _socketGeneration = 0;
+  bool _connectInFlight = false;
 
   final _state = ValueNotifier<RelayState>(RelayState.idle);
   ValueListenable<RelayState> get stateListenable => _state;
   RelayState get state => _state.value;
 
-  final _payloadController =
-      StreamController<Map<String, dynamic>>.broadcast();
+  final _payloadController = StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get payloads => _payloadController.stream;
 
   final _failureController = StreamController<RelayFailure>.broadcast();
@@ -81,6 +82,7 @@ class RelayClient {
   int _reconnectAttempt = 0;
   int _heartbeatTick = 0;
   bool _staleProbeSent = false;
+  bool _kickRecoveryAttempted = false;
   DateTime _lastInboundAt = DateTime.now();
 
   /// Raw frame logging is expensive and can expose payload contents. Keep it
@@ -106,13 +108,19 @@ class RelayClient {
     _disposed = false;
     _intentionallyClosed = false;
     _reconnectAttempt = 0;
+    _kickRecoveryAttempted = false;
     _setState(RelayState.connecting);
     await _connect();
   }
 
   Future<void> _connect() async {
-    _socketSub?.cancel();
+    if (_connectInFlight || _disposed) return;
+    _connectInFlight = true;
+    final generation = ++_socketGeneration;
+    await _socketSub?.cancel();
+    _socketSub = null;
     _socket?.sink.close();
+    _socket = null;
     _lastPairStatusAckAt = DateTime.now();
     _lastInboundAt = DateTime.now();
     final uri = params.relayWsUri;
@@ -122,21 +130,32 @@ class RelayClient {
       socket = WebSocketChannel.connect(uri);
       await socket.ready;
     } catch (e) {
+      _connectInFlight = false;
       _log('[relay] connect failed: $e');
-      _handleSocketClosed(1006, e.toString());
+      if (generation == _socketGeneration) {
+        _handleSocketClosed(1006, e.toString(), generation: generation);
+      }
       return;
     }
     if (_disposed) {
       socket.sink.close();
+      _connectInFlight = false;
+      return;
+    }
+    if (generation != _socketGeneration) {
+      socket.sink.close();
+      _connectInFlight = false;
       return;
     }
     _socket = socket;
     _socketSub = socket.stream.listen(
-      _handleRawMessage,
+      (data) => _handleRawMessage(data, generation: generation),
       onError: (e) => _log('[relay] socket error: $e'),
-      onDone: () =>
-          _handleSocketClosed(socket.closeCode ?? 1006, socket.closeReason),
+      onDone: () => _handleSocketClosed(
+          socket.closeCode ?? 1006, socket.closeReason,
+          generation: generation),
     );
+    _connectInFlight = false;
     _setState(RelayState.authenticating);
     _send({
       'type': 'auth_init',
@@ -202,7 +221,8 @@ class RelayClient {
     }
   }
 
-  void _handleRawMessage(dynamic data) {
+  void _handleRawMessage(dynamic data, {required int generation}) {
+    if (generation != _socketGeneration || _disposed) return;
     _lastInboundAt = DateTime.now();
     Map<String, dynamic>? frame;
     try {
@@ -275,6 +295,7 @@ class RelayClient {
     if (status == 'matched') {
       _rewaitTimer?.cancel();
       _reconnectAttempt = 0;
+      _kickRecoveryAttempted = false;
       _clearWaitingTimer();
       _setState(RelayState.paired);
       _wasPaired = true;
@@ -286,6 +307,18 @@ class RelayClient {
   void _handleRelayError(String? code, String? message) {
     _log('[relay] error frame: $code $message');
     if (code == 'KICKED') {
+      final detail = (message ?? '').toLowerCase();
+      final transient = detail.contains('conflict') ||
+          detail.contains('duplicate') ||
+          detail.contains('already connected') ||
+          detail.contains('another connection');
+      if (!_kickRecoveryAttempted &&
+          (state == RelayState.authenticating || transient)) {
+        _kickRecoveryAttempted = true;
+        _failureController.add(RelayFailure('session-conflict', message));
+        _reconnect();
+        return;
+      }
       _setState(RelayState.kicked);
       _intentionallyClosed = true;
       _failureController.add(RelayFailure('kicked', message));
@@ -293,8 +326,9 @@ class RelayClient {
     }
   }
 
-  void _handleSocketClosed(int code, String? reason) {
+  void _handleSocketClosed(int code, String? reason, {int? generation}) {
     if (_disposed) return;
+    if (generation != null && generation != _socketGeneration) return;
     _stopHeartbeat();
     _clearWaitingTimer();
     final mapped = relayCloseReason(code);
@@ -354,7 +388,10 @@ class RelayClient {
         'device_sid': params.deviceSid,
         'client_ts': DateTime.now().millisecondsSinceEpoch,
       });
-    } else if (state == RelayState.reconnecting) {
+    } else if (state != RelayState.idle &&
+        state != RelayState.closed &&
+        state != RelayState.kicked) {
+      _log('[relay] poke: state=$state, forcing reconnect');
       _reconnectTimer?.cancel();
       _reconnectTimer = null;
       _connect();
@@ -395,6 +432,7 @@ class RelayClient {
   }
 
   Future<void> _reconnect() async {
+    if (_disposed || _intentionallyClosed || _connectInFlight) return;
     _reconnectTimer?.cancel();
     // Go through `reconnecting` so listeners (bridge recovery) know the
     // connection dropped — the heartbeat-timeout path used to skip this and
@@ -414,7 +452,7 @@ class RelayClient {
     try {
       await socket?.sink.close(3000, 'debug-drop');
     } catch (_) {}
-    _handleSocketClosed(1006, 'debug-drop');
+    _handleSocketClosed(1006, 'debug-drop', generation: _socketGeneration);
   }
 
   Future<void> dispose() async {

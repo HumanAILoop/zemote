@@ -12,6 +12,9 @@ import 'diff_view.dart';
 import 'markdown_view.dart';
 import 'theme.dart';
 import 'structured_data_view.dart';
+import '../voice/voice_model_store.dart';
+import '../voice/voice_model_events.dart';
+import '../voice/voice_transcriber.dart';
 
 class PlanStep {
   final String content;
@@ -180,6 +183,11 @@ class _ChatPageState extends State<ChatPage> {
   Object? _planData;
   bool _planLoading = false;
   int _planRevision = -1;
+  final _voiceStore = VoiceModelStore();
+  VoiceTranscriber? _voiceTranscriber;
+  bool _voiceAvailable = false;
+  bool _voiceRecording = false;
+  bool _voiceWorking = false;
 
   /// Draft-mode (no session yet) model/mode/thought selection, passed as
   /// `config` to createSession on first send.
@@ -194,6 +202,7 @@ class _ChatPageState extends State<ChatPage> {
   @override
   void initState() {
     super.initState();
+    VoiceModelEvents.changed.addListener(_loadVoiceAvailability);
     _sessionId = widget.sessionId;
     _transport = widget.session.conversation(widget.scope);
     _scrollController.addListener(_onScroll);
@@ -201,6 +210,7 @@ class _ChatPageState extends State<ChatPage> {
       _subscribe();
     }
     _loadPrep();
+    _loadVoiceAvailability();
     _inputController.addListener(() {
       final text = _inputController.text;
       final show = (text.startsWith('/') || text.startsWith('\$')) &&
@@ -236,9 +246,55 @@ class _ChatPageState extends State<ChatPage> {
   @override
   void dispose() {
     _subscription?.dispose();
+    VoiceModelEvents.changed.removeListener(_loadVoiceAvailability);
+    _voiceTranscriber?.dispose();
     _inputController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadVoiceAvailability() async {
+    try {
+      final id = await _voiceStore.enabledModelId();
+      if (!mounted) return;
+      setState(() {
+        _voiceAvailable = id != null;
+        if (id != null) {
+          _voiceTranscriber = VoiceTranscriber(store: _voiceStore);
+        }
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _toggleVoiceInput() async {
+    final transcriber = _voiceTranscriber;
+    if (transcriber == null || _sending || _voiceWorking) return;
+    if (_voiceRecording) {
+      setState(() {
+        _voiceRecording = false;
+        _voiceWorking = true;
+      });
+      try {
+        final text = await transcriber.stop();
+        if (mounted && text.isNotEmpty) {
+          final existing = _inputController.text.trim();
+          _inputController.text = existing.isEmpty ? text : '$existing $text';
+          _inputController.selection =
+              TextSelection.collapsed(offset: _inputController.text.length);
+        }
+      } catch (e) {
+        if (mounted) _toast('语音识别失败: $e');
+      } finally {
+        if (mounted) setState(() => _voiceWorking = false);
+      }
+      return;
+    }
+    try {
+      await transcriber.start();
+      if (mounted) setState(() => _voiceRecording = true);
+    } catch (e) {
+      if (mounted) _toast('无法开始录音: $e');
+    }
   }
 
   Future<void> _subscribe() async {
@@ -1071,9 +1127,13 @@ class _ChatPageState extends State<ChatPage> {
           _InputBar(
             controller: _inputController,
             sending: _sending,
+            voiceAvailable: _voiceAvailable,
+            voiceRecording: _voiceRecording,
+            voiceWorking: _voiceWorking,
             onSend: _send,
             onAttach: _pickFiles,
             onSkills: _openSkillsPicker,
+            onVoice: _toggleVoiceInput,
           ),
         ],
       ),
@@ -4014,16 +4074,24 @@ class _SkillsPickerSheet extends StatelessWidget {
 class _InputBar extends StatefulWidget {
   final TextEditingController controller;
   final bool sending;
+  final bool voiceAvailable;
+  final bool voiceRecording;
+  final bool voiceWorking;
   final VoidCallback onSend;
   final VoidCallback onAttach;
   final VoidCallback onSkills;
+  final VoidCallback onVoice;
 
   const _InputBar({
     required this.controller,
     required this.sending,
+    required this.voiceAvailable,
+    required this.voiceRecording,
+    required this.voiceWorking,
     required this.onSend,
     required this.onAttach,
     required this.onSkills,
+    required this.onVoice,
   });
 
   @override
@@ -4051,6 +4119,26 @@ class _InputBarState extends State<_InputBar> {
               tooltip: '选择 Skills',
               onPressed: widget.sending ? null : widget.onSkills,
             ),
+            if (widget.voiceAvailable)
+              IconButton(
+                icon: widget.voiceWorking
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(
+                        widget.voiceRecording ? Icons.stop_circle : Icons.mic,
+                        size: 20,
+                        color: widget.voiceRecording
+                            ? ZColors.danger
+                            : ZInk.muted(context),
+                      ),
+                tooltip: widget.voiceRecording ? '停止录音' : '语音输入',
+                onPressed: widget.sending || widget.voiceWorking
+                    ? null
+                    : widget.onVoice,
+              ),
             Expanded(
               child: TextField(
                 controller: widget.controller,
