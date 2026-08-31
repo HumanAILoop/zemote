@@ -188,6 +188,7 @@ class _ChatPageState extends State<ChatPage> {
   bool _voiceAvailable = false;
   bool _voiceRecording = false;
   bool _voiceWorking = false;
+  String _voiceDraftPrefix = '';
 
   /// Draft-mode (no session yet) model/mode/thought selection, passed as
   /// `config` to createSession on first send.
@@ -277,8 +278,8 @@ class _ChatPageState extends State<ChatPage> {
       try {
         final text = await transcriber.stop();
         if (mounted && text.isNotEmpty) {
-          final existing = _inputController.text.trim();
-          _inputController.text = existing.isEmpty ? text : '$existing $text';
+          _inputController.text =
+              _voiceDraftPrefix.isEmpty ? text : '$_voiceDraftPrefix $text';
           _inputController.selection =
               TextSelection.collapsed(offset: _inputController.text.length);
         }
@@ -290,9 +291,18 @@ class _ChatPageState extends State<ChatPage> {
       return;
     }
     try {
-      await transcriber.start();
+      _voiceDraftPrefix = _inputController.text.trim();
       if (mounted) setState(() => _voiceRecording = true);
+      await transcriber.start(onPartial: (text) {
+        if (!mounted || !_voiceRecording) return;
+        _inputController.text =
+            _voiceDraftPrefix.isEmpty ? text : '$_voiceDraftPrefix $text';
+        _inputController.selection =
+            TextSelection.collapsed(offset: _inputController.text.length);
+      });
     } catch (e) {
+      _voiceDraftPrefix = '';
+      if (mounted) setState(() => _voiceRecording = false);
       if (mounted) _toast('无法开始录音: $e');
     }
   }
@@ -1073,6 +1083,7 @@ class _ChatPageState extends State<ChatPage> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   _GoalBanner(state: state),
+                  _ActiveExecutionBar(state: state),
                   _ConversationInsights(
                     state: state,
                     transport: _transport,
@@ -1343,6 +1354,20 @@ class _TurnGroupWidget extends StatelessWidget {
           onAction: onAction,
           state: state,
         ));
+      } else if (_isExecutionRow(p.row!)) {
+        final executionRows = <Map<String, dynamic>>[p.row!];
+        while (i + 1 < parts.parts.length &&
+            parts.parts[i + 1].kind == 'row' &&
+            _isExecutionRow(parts.parts[i + 1].row!)) {
+          executionRows.add(parts.parts[++i].row!);
+        }
+        children.add(_ExecutionTrace(
+          rows: executionRows,
+          transport: transport,
+          sessionId: sessionId,
+          onAction: onAction,
+          state: state,
+        ));
       } else {
         children.add(_RowWidget(
           row: p.row!,
@@ -1361,6 +1386,167 @@ class _TurnGroupWidget extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: children,
     );
+  }
+}
+
+bool _isExecutionRow(Map<String, dynamic> row) {
+  final kind = row['kind'];
+  return kind == 'toolCall' || kind == 'reasoning' || kind == 'subagent';
+}
+
+String compactExecutionLabel(List<Map<String, dynamic>> rows) {
+  final tools = rows.where((row) => row['kind'] == 'toolCall').length;
+  final reasoning = rows.where((row) => row['kind'] == 'reasoning').length;
+  final subagents = rows.where((row) => row['kind'] == 'subagent').length;
+  final running = rows
+      .any((row) => row['status'] == 'running' || row['state'] == 'streaming');
+  final failed =
+      rows.any((row) => row['status'] == 'error' || row['status'] == 'failed');
+  final parts = <String>[
+    if (running) '执行中',
+    if (failed) '有失败步骤',
+    if (tools > 0) '$tools 个工具',
+    if (reasoning > 0) '$reasoning 段思考',
+    if (subagents > 0) '$subagents 个子代理',
+  ];
+  return parts.isEmpty ? '执行过程' : parts.join(' · ');
+}
+
+class _ExecutionTrace extends StatelessWidget {
+  final List<Map<String, dynamic>> rows;
+  final ConversationTransport transport;
+  final String sessionId;
+  final Future<void> Function(String, Future<dynamic> Function()) onAction;
+  final ConversationState state;
+
+  const _ExecutionTrace({
+    required this.rows,
+    required this.transport,
+    required this.sessionId,
+    required this.onAction,
+    required this.state,
+  });
+
+  bool get _running => rows
+      .any((row) => row['status'] == 'running' || row['state'] == 'streaming');
+
+  bool get _failed =>
+      rows.any((row) => row['status'] == 'error' || row['status'] == 'failed');
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _running
+        ? ZColors.running
+        : _failed
+            ? ZColors.danger
+            : ZInk.muted(context);
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 3),
+      decoration: BoxDecoration(
+        color: ZInk.panel(context),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: ZInk.panelBorder(context)),
+      ),
+      child: ExpansionTile(
+        initiallyExpanded: _running,
+        dense: true,
+        shape: const Border(),
+        collapsedShape: const Border(),
+        tilePadding: const EdgeInsets.symmetric(horizontal: 11),
+        leading: Icon(
+          _running
+              ? Icons.sync
+              : _failed
+                  ? Icons.error_outline
+                  : Icons.account_tree_outlined,
+          size: 16,
+          color: color,
+        ),
+        title: Text(compactExecutionLabel(rows),
+            style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: ZInk.solid(context))),
+        subtitle: Text('点击查看执行详情',
+            style: TextStyle(fontSize: 10.5, color: ZInk.faint(context))),
+        children: [
+          for (final row in rows)
+            _RowWidget(
+              row: row,
+              showFeedback: false,
+              transport: transport,
+              sessionId: sessionId,
+              onAction: onAction,
+              state: state,
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActiveExecutionBar extends StatelessWidget {
+  final ConversationState state;
+
+  const _ActiveExecutionBar({required this.state});
+
+  @override
+  Widget build(BuildContext context) {
+    final active = state.rows.where((row) {
+      final kind = row['kind'];
+      return (kind == 'toolCall' ||
+              kind == 'reasoning' ||
+              kind == 'subagent') &&
+          (row['status'] == 'running' ||
+              row['status'] == 'inputStreaming' ||
+              row['state'] == 'streaming');
+    }).toList();
+    if (active.isEmpty) return const SizedBox.shrink();
+    final current = active.last;
+    final label = current['kind'] == 'toolCall'
+        ? '${current['toolName'] ?? '工具'} 执行中'
+        : current['kind'] == 'subagent'
+            ? '子代理执行中'
+            : '正在思考';
+    return Container(
+      margin: const EdgeInsets.fromLTRB(14, 3, 14, 0),
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+      decoration: BoxDecoration(
+        color: ZColors.running.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: ZColors.running.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          const SizedBox(
+            width: 13,
+            height: 13,
+            child: CircularProgressIndicator(strokeWidth: 1.6),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              active.length > 1 ? '$label · 还有 ${active.length - 1} 项' : label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 11.5, color: ZInk.soft(context)),
+            ),
+          ),
+          TextButton(
+            onPressed: () => _scrollToLatest(context),
+            style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                minimumSize: Size.zero),
+            child: const Text('跟随', style: TextStyle(fontSize: 11)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _scrollToLatest(BuildContext context) {
+    Scrollable.ensureVisible(context,
+        duration: const Duration(milliseconds: 180), alignment: 1);
   }
 }
 
@@ -1818,7 +2004,7 @@ class _ReasoningTile extends StatelessWidget {
         border: Border.all(color: ZInk.reasoningBorder(context)),
       ),
       child: ExpansionTile(
-        initiallyExpanded: true,
+        initiallyExpanded: streaming,
         dense: true,
         shape: const Border(),
         collapsedShape: const Border(),
@@ -4108,37 +4294,11 @@ class _InputBarState extends State<_InputBar> {
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
             IconButton(
-              icon:
-                  Icon(Icons.attach_file, size: 20, color: ZInk.muted(context)),
-              tooltip: '添加附件',
-              onPressed: widget.sending ? null : widget.onAttach,
+              icon: Icon(Icons.add_circle_outline,
+                  size: 23, color: ZInk.muted(context)),
+              tooltip: '更多操作',
+              onPressed: widget.sending ? null : () => _showActions(context),
             ),
-            IconButton(
-              icon: Icon(Icons.auto_awesome_outlined,
-                  size: 20, color: ZInk.muted(context)),
-              tooltip: '选择 Skills',
-              onPressed: widget.sending ? null : widget.onSkills,
-            ),
-            if (widget.voiceAvailable)
-              IconButton(
-                icon: widget.voiceWorking
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : Icon(
-                        widget.voiceRecording ? Icons.stop_circle : Icons.mic,
-                        size: 20,
-                        color: widget.voiceRecording
-                            ? ZColors.danger
-                            : ZInk.muted(context),
-                      ),
-                tooltip: widget.voiceRecording ? '停止录音' : '语音输入',
-                onPressed: widget.sending || widget.voiceWorking
-                    ? null
-                    : widget.onVoice,
-              ),
             Expanded(
               child: TextField(
                 controller: widget.controller,
@@ -4152,6 +4312,27 @@ class _InputBarState extends State<_InputBar> {
               ),
             ),
             const SizedBox(width: 10),
+            if (widget.voiceAvailable)
+              IconButton(
+                icon: widget.voiceWorking
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(
+                        widget.voiceRecording ? Icons.stop_circle : Icons.mic,
+                        size: 22,
+                        color: widget.voiceRecording
+                            ? ZColors.danger
+                            : ZInk.muted(context),
+                      ),
+                tooltip: widget.voiceRecording ? '停止录音' : '语音输入',
+                onPressed: widget.sending || widget.voiceWorking
+                    ? null
+                    : widget.onVoice,
+              ),
+            const SizedBox(width: 4),
             Container(
               decoration: const BoxDecoration(
                 color: ZColors.primary,
@@ -4175,4 +4356,84 @@ class _InputBarState extends State<_InputBar> {
       ),
     );
   }
+
+  void _showActions(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('更多操作',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  _ActionItem(
+                    icon: Icons.attach_file,
+                    label: '上传文件',
+                    onTap: () {
+                      Navigator.pop(context);
+                      widget.onAttach();
+                    },
+                  ),
+                  _ActionItem(
+                    icon: Icons.auto_awesome_outlined,
+                    label: '选择 Skill',
+                    onTap: () {
+                      Navigator.pop(context);
+                      widget.onSkills();
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ActionItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  const _ActionItem({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) => InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: SizedBox(
+          width: 82,
+          child: Column(
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: ZColors.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(icon, color: ZColors.primary, size: 25),
+              ),
+              const SizedBox(height: 7),
+              Text(label,
+                  style: const TextStyle(fontSize: 12),
+                  textAlign: TextAlign.center),
+            ],
+          ),
+        ),
+      );
 }

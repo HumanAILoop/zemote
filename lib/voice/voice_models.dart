@@ -69,6 +69,38 @@ const voiceModels = <VoiceModelInfo>[
       'tiny.en-tokens.txt',
     ],
   ),
+  VoiceModelInfo(
+    id: 'qwen3-asr-06b',
+    name: 'Qwen3-ASR 0.6B',
+    description: '多语种和中文方言，准确率优先，资源占用较高',
+    languages: '中 / 英 / 粤 / 日 / 韩 / 其他',
+    archiveUrl:
+        'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25.tar.bz2',
+    directory: 'sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25',
+    mainFile: 'encoder.int8.onnx',
+    files: [
+      'conv_frontend.onnx',
+      'encoder.int8.onnx',
+      'decoder.int8.onnx',
+      'tokenizer/tokenizer.json',
+    ],
+  ),
+  VoiceModelInfo(
+    id: 'fun-asr-nano',
+    name: 'Fun-ASR Nano',
+    description: '中文、英语、日语，中文场景准确率优先',
+    languages: '中 / 英 / 日',
+    archiveUrl:
+        'https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-funasr-nano-int8-2025-12-30.tar.bz2',
+    directory: 'sherpa-onnx-funasr-nano-int8-2025-12-30',
+    mainFile: 'llm.int8.onnx',
+    files: [
+      'encoder_adaptor.int8.onnx',
+      'llm.int8.onnx',
+      'embedding.int8.onnx',
+      'Qwen3-0.6B/tokenizer.json',
+    ],
+  ),
 ];
 
 VoiceModelInfo voiceModelById(String id) =>

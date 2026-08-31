@@ -4,7 +4,7 @@ description: >-
   reimplementation). Manage multiple desktops: tasks, Conversation V4 chat,
   file changes, model providers and usage quotas.
 publish_to: "none"
-version: 0.5.1-beta.2+8
+version: 0.5.1-beta.3+9
 
 environment:
   sdk: ^3.5.0

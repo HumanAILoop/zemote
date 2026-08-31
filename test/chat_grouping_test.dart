@@ -3,6 +3,18 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:zemote/ui/chat_page.dart';
 
 void main() {
+  test('compact execution label summarizes tool-heavy turns', () {
+    expect(
+      compactExecutionLabel([
+        {'kind': 'reasoning', 'text': '思考'},
+        {'kind': 'toolCall', 'status': 'success'},
+        {'kind': 'toolCall', 'status': 'running'},
+        {'kind': 'subagent', 'status': 'success'},
+      ]),
+      '执行中 · 2 个工具 · 1 段思考 · 1 个子代理',
+    );
+  });
+
   test('summarizeFileChanges counts files and line changes', () {
     final summary = summarizeFileChanges({
       'files': ['a.dart', 'b.dart'],
