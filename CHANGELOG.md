@@ -2,7 +2,7 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
-## [0.5.1-beta.3] - 2026-08-31
+## [0.5.1] - 2026-08-31
 
 ### Added
 - 聊天输入栏改为微信式布局：加号菜单集中上传文件和选择 Skill，麦克风独立位于输入框右侧。
