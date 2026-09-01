@@ -2,6 +2,11 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [0.5.2-beta.2] - 2026-09-01
+
+### Fixed
+- 修复更新检查仍使用旧版硬编码版本号，安装 Beta 后会重复提示同一版本的问题。
+
 ## [0.5.2-beta.1] - 2026-09-01
 
 ### Changed

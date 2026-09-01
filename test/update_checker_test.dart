@@ -3,8 +3,15 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:zemote/update/update_checker.dart';
 import 'package:zemote/update/update_channel.dart';
+import 'package:zemote/update/app_version.dart';
 
 void main() {
+  test('bundled app version matches the beta release currently being built',
+      () {
+    expect(appVersion, '0.5.2-beta.2');
+    expect(appBuildNumber, 12);
+  });
+
   test('beta channel setting persists', () async {
     SharedPreferences.setMockInitialValues({});
     final settings = UpdateChannelSettings();
@@ -37,6 +44,12 @@ void main() {
       expect(compareVersions('0.5.0-rc.1', '0.5.0-beta.9'), greaterThan(0));
       expect(compareVersions('0.5.0', '0.5.0-rc.1'), greaterThan(0));
       expect(compareVersions('0.5.0-beta.1', '0.5.0'), lessThan(0));
+    });
+
+    test('same beta release is not newer than the installed beta', () {
+      expect(compareVersions('0.5.2-beta.2', appVersion), 0);
+      expect(compareVersions('0.5.2-beta.3', appVersion), greaterThan(0));
+      expect(compareVersions('0.5.2-beta.1', appVersion), lessThan(0));
     });
 
     test('build metadata does not affect precedence', () {
