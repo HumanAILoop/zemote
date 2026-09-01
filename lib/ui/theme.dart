@@ -64,7 +64,6 @@ class ZInk {
   static const _slate700 = Color(0xFF334155);
   static const _slate600 = Color(0xFF475569);
   static const _slate500 = Color(0xFF64748B);
-  static const _slate400 = Color(0xFF94A3B8);
   static const _slate300 = Color(0xFFCBD5E1);
 
   /// Primary text/ink (dark: `Colors.white`, light: slate-900).
@@ -81,11 +80,11 @@ class ZInk {
 
   /// Faint ink (dark: `Colors.white38`, light: slate-500).
   static Color faint(BuildContext context) =>
-      _isLight(context) ? _slate500 : Colors.white38;
+      _isLight(context) ? _slate500 : const Color(0xFFB6C2D3);
 
   /// Ghost ink (dark: `Colors.white24`, light: slate-400).
   static Color ghost(BuildContext context) =>
-      _isLight(context) ? _slate400 : Colors.white24;
+      _isLight(context) ? _slate500 : const Color(0xFF8FA1B8);
 
   /// Hairline ink (dark: `Colors.white12`, light: slate-300).
   static Color hairline(BuildContext context) =>
@@ -182,7 +181,7 @@ ThemeData buildDarkTheme() {
         borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: ZColors.primary, width: 1.5),
       ),
-      hintStyle: const TextStyle(color: Colors.white30, fontSize: 14),
+      hintStyle: const TextStyle(color: Colors.white60, fontSize: 14),
     ),
     dividerTheme: const DividerThemeData(
       color: ZColors.darkBorder,
@@ -207,7 +206,7 @@ ThemeData buildDarkTheme() {
     ),
     tabBarTheme: const TabBarThemeData(
       labelColor: ZColors.primary,
-      unselectedLabelColor: Colors.white38,
+      unselectedLabelColor: Colors.white60,
       indicatorColor: ZColors.primary,
       dividerColor: ZColors.darkBorder,
       labelStyle: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
@@ -244,7 +243,7 @@ ThemeData buildDarkTheme() {
       bodySmall: TextStyle(color: Colors.white54, fontSize: 12, height: 1.4),
       titleMedium: TextStyle(
           color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600),
-      labelSmall: TextStyle(color: Colors.white38, fontSize: 11),
+      labelSmall: TextStyle(color: Colors.white60, fontSize: 11),
     ),
   );
 }
@@ -300,7 +299,7 @@ ThemeData buildLightTheme() {
         borderRadius: BorderRadius.circular(12),
         borderSide: const BorderSide(color: ZColors.primary, width: 1.5),
       ),
-      hintStyle: const TextStyle(color: Colors.black26, fontSize: 14),
+      hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 14),
     ),
     snackBarTheme: SnackBarThemeData(
       behavior: SnackBarBehavior.floating,
@@ -318,7 +317,7 @@ ThemeData buildLightTheme() {
     ),
     tabBarTheme: const TabBarThemeData(
       labelColor: ZColors.primaryDim,
-      unselectedLabelColor: Colors.black38,
+      unselectedLabelColor: Color(0xFF475569),
       indicatorColor: ZColors.primaryDim,
       dividerColor: ZColors.lightBorder,
       labelStyle: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
@@ -375,19 +374,20 @@ class ThemeControllerProvider extends InheritedWidget {
 /// Status color mapping shared by task/chat UIs. The unknown-status fallback
 /// is theme-aware so it stays visible on light surfaces too.
 Color statusColor(String status, BuildContext context) {
+  final light = Theme.of(context).brightness == Brightness.light;
   switch (status) {
     case 'running':
     case 'prewarming':
-      return ZColors.running;
+      return light ? const Color(0xFF0369A1) : ZColors.running;
     case 'error':
     case 'failed':
-      return ZColors.danger;
+      return light ? const Color(0xFFB91C1C) : ZColors.danger;
     case 'completed':
     case 'completedSuccess':
-      return ZColors.success;
+      return light ? const Color(0xFF15803D) : ZColors.success;
     case 'completedInterrupted':
     case 'cancelled':
-      return ZColors.warning;
+      return light ? const Color(0xFFB45309) : ZColors.warning;
     default:
       return ZInk.faint(context);
   }

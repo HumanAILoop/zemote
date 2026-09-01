@@ -108,6 +108,7 @@ class _TaskHomePageState extends State<TaskHomePage>
   String? _error;
   String _query = '';
   String _statusFilter = 'all';
+  bool _searchOpen = false;
   StreamSubscription? _updatedSub;
   ConversationTransport? _convTransport;
   SessionsIndexSubscription? _sessionsSub;
@@ -721,44 +722,117 @@ class _TaskHomePageState extends State<TaskHomePage>
     );
   }
 
+  void _showStatusFilter() {
+    showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(
+              title:
+                  Text('筛选任务', style: TextStyle(fontWeight: FontWeight.w700)),
+            ),
+            for (final item in [
+              ('all', '全部任务', Icons.list),
+              ('running', '运行中 (${_runningTasks.length})', Icons.sync),
+              ('failed', '失败', Icons.error_outline),
+              ('completed', '已完成', Icons.check_circle_outline),
+            ])
+              ListTile(
+                leading: Icon(item.$3),
+                title: Text(item.$2),
+                trailing: _statusFilter == item.$1
+                    ? const Icon(Icons.check, color: ZColors.primary)
+                    : null,
+                onTap: () {
+                  setState(() => _statusFilter = item.$1);
+                  Navigator.pop(context);
+                },
+              ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final running = _runningTasks;
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 18, 12, 0),
+          padding: const EdgeInsets.fromLTRB(16, 6, 8, 2),
           child: Row(
             children: [
               Expanded(
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(10),
-                  onTap: widget.workspaces.length > 1
-                      ? widget.onSwitchWorkspace
-                      : null,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Flexible(
-                          child: Text(
-                            workspaceTitle(widget.workspace),
-                            style: const TextStyle(
-                                fontSize: 22, fontWeight: FontWeight.w700),
-                            overflow: TextOverflow.ellipsis,
+                child: _searchOpen
+                    ? TextField(
+                        controller: _searchController,
+                        autofocus: true,
+                        style: const TextStyle(fontSize: 14),
+                        decoration: InputDecoration(
+                          hintText: tr(context, 'home.search'),
+                          prefixIcon: const Icon(Icons.search, size: 19),
+                          isDense: true,
+                          contentPadding:
+                              const EdgeInsets.symmetric(vertical: 9),
+                        ),
+                        onChanged: (value) => setState(() => _query = value),
+                      )
+                    : InkWell(
+                        borderRadius: BorderRadius.circular(10),
+                        onTap: widget.workspaces.length > 1
+                            ? widget.onSwitchWorkspace
+                            : null,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  workspaceTitle(widget.workspace),
+                                  style: const TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w700),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              if (widget.workspaces.length > 1)
+                                Icon(Icons.keyboard_arrow_down,
+                                    color: ZInk.faint(context), size: 19),
+                            ],
                           ),
                         ),
-                        if (widget.workspaces.length > 1)
-                          Padding(
-                            padding: EdgeInsets.only(left: 4),
-                            child: Icon(Icons.keyboard_arrow_down,
-                                color: ZInk.faint(context), size: 20),
-                          ),
-                      ],
-                    ),
-                  ),
+                      ),
+              ),
+              IconButton(
+                icon: Icon(_searchOpen ? Icons.close : Icons.search),
+                tooltip: _searchOpen ? '关闭搜索' : '搜索',
+                onPressed: () {
+                  setState(() {
+                    _searchOpen = !_searchOpen;
+                    if (!_searchOpen) {
+                      _searchController.clear();
+                      _query = '';
+                    }
+                  });
+                },
+              ),
+              IconButton(
+                icon: Badge(
+                  isLabelVisible: _statusFilter != 'all',
+                  child: const Icon(Icons.filter_list),
                 ),
+                tooltip: '筛选',
+                onPressed: _showStatusFilter,
+              ),
+              IconButton.filled(
+                icon: const Icon(Icons.add, size: 20),
+                tooltip: '新建任务',
+                onPressed: _newChat,
               ),
               IconButton(
                 icon: const Icon(Icons.more_horiz),
@@ -768,84 +842,11 @@ class _TaskHomePageState extends State<TaskHomePage>
             ],
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
-          child: _NewTaskHero(onTap: _newChat),
-        ),
-        if (running.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
-            child: _RunningTasksSection(
-              tasks: running.take(1).toList(),
-              totalCount: running.length,
-              titleOf: _taskTitle,
-              statusOf: _taskStatus,
-              onOpen: _openTask,
-            ),
-          ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: Text(
-              '所有任务',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-            ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
-          child: TextField(
-            controller: _searchController,
-            style: const TextStyle(fontSize: 14),
-            decoration: InputDecoration(
-              hintText: tr(context, 'home.search'),
-              prefixIcon:
-                  Icon(Icons.search, size: 20, color: ZInk.ghost(context)),
-              isDense: true,
-              suffixIcon: _query.isEmpty
-                  ? null
-                  : IconButton(
-                      icon: const Icon(Icons.clear, size: 18),
-                      onPressed: () {
-                        _searchController.clear();
-                        setState(() => _query = '');
-                      },
-                    ),
-            ),
-            onChanged: (v) => setState(() => _query = v),
-          ),
-        ),
-        SizedBox(
-          height: 38,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            children: [
-              for (final item in const [
-                ('all', '全部'),
-                ('running', '运行中'),
-                ('failed', '失败'),
-                ('completed', '已完成'),
-              ])
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 3),
-                  child: ChoiceChip(
-                    label: Text(item.$2, style: const TextStyle(fontSize: 11)),
-                    selected: _statusFilter == item.$1,
-                    onSelected: (_) => setState(() => _statusFilter = item.$1),
-                    visualDensity: VisualDensity.compact,
-                  ),
-                ),
-            ],
-          ),
-        ),
         TabBar(
           controller: _tabController,
           isScrollable: true,
           tabAlignment: TabAlignment.start,
+          labelPadding: const EdgeInsets.symmetric(horizontal: 16),
           tabs: [
             Tab(text: '${tr(context, 'home.tab.tasks')} ${_tasks.length}'),
             Tab(text: '${tr(context, 'home.tab.pinned')} ${_pinned.length}'),
@@ -904,176 +905,6 @@ class _TaskHomePageState extends State<TaskHomePage>
   }
 }
 
-class _NewTaskHero extends StatelessWidget {
-  final VoidCallback onTap;
-
-  const _NewTaskHero({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: ZColors.primary,
-      borderRadius: BorderRadius.circular(18),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 15, 12, 15),
-          child: Row(
-            children: [
-              Container(
-                width: 38,
-                height: 38,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.16),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.add, color: Colors.white),
-              ),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '新建任务',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    SizedBox(height: 3),
-                    Text(
-                      '描述你想让桌面端完成的工作',
-                      style: TextStyle(color: Colors.white70, fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(Icons.arrow_forward, color: Colors.white70, size: 20),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _RunningTasksSection extends StatelessWidget {
-  final List<dynamic> tasks;
-  final int totalCount;
-  final String Function(dynamic) titleOf;
-  final String Function(dynamic) statusOf;
-  final void Function(Map<String, dynamic>) onOpen;
-
-  const _RunningTasksSection({
-    required this.tasks,
-    required this.totalCount,
-    required this.titleOf,
-    required this.statusOf,
-    required this.onOpen,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Text(
-              '正在运行',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
-            ),
-            const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
-              decoration: BoxDecoration(
-                color: ZColors.running.withValues(alpha: 0.14),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Text(
-                '$totalCount',
-                style: const TextStyle(
-                  color: ZColors.running,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        ...tasks.map((raw) {
-          if (raw is! Map) return const SizedBox.shrink();
-          final task = raw.cast<String, dynamic>();
-          final preview = task['lastAssistantPreview'] as String?;
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Card(
-              color: ZColors.running.withValues(alpha: 0.08),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(14),
-                onTap: () => onOpen(task),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.sync, color: ZColors.running, size: 18),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              titleOf(task),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            if (preview != null && preview.isNotEmpty) ...[
-                              const SizedBox(height: 3),
-                              Text(
-                                preview,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: ZInk.muted(context),
-                                  fontSize: 12,
-                                ),
-                              ),
-                            ],
-                            const SizedBox(height: 4),
-                            Text(
-                              '${taskStatusLabel(statusOf(task))} · ${relativeTime((task['updatedAt'] as num?)?.toInt())}',
-                              style: const TextStyle(
-                                color: ZColors.running,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Icon(Icons.chevron_right, color: ZInk.ghost(context)),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          );
-        }),
-      ],
-    );
-  }
-}
-
 class _TaskListSkeleton extends StatelessWidget {
   const _TaskListSkeleton();
 
@@ -1093,7 +924,7 @@ class _TaskListSkeleton extends StatelessWidget {
                 width: 180 - (index % 3) * 40.0,
                 height: 13,
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.07),
+                  color: ZInk.tileBorder(context),
                   borderRadius: BorderRadius.circular(6),
                 ),
               ),
@@ -1102,7 +933,7 @@ class _TaskListSkeleton extends StatelessWidget {
                 width: double.infinity,
                 height: 10,
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.05),
+                  color: ZInk.tile(context),
                   borderRadius: BorderRadius.circular(5),
                 ),
               ),
@@ -1111,7 +942,7 @@ class _TaskListSkeleton extends StatelessWidget {
                 width: 120,
                 height: 9,
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.04),
+                  color: ZInk.tileBorder(context),
                   borderRadius: BorderRadius.circular(5),
                 ),
               ),

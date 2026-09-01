@@ -146,8 +146,7 @@ List<DiffLine> _buildLines(String oldText, String newText) {
       for (var i = from; i < from + contextKeep; i++) {
         lines.add(DiffLine(DiffLineType.context, ' ${src[i]}'));
       }
-      lines.add(const DiffLine(
-          DiffLineType.context, ' ⋯'));
+      lines.add(const DiffLine(DiffLineType.context, ' ⋯'));
       for (var i = to - contextKeep; i < to; i++) {
         lines.add(DiffLine(DiffLineType.context, ' ${src[i]}'));
       }
@@ -178,25 +177,24 @@ class DiffView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final light = Theme.of(context).brightness == Brightness.light;
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.3),
+        color: ZInk.codeBlockBg(context),
         borderRadius: BorderRadius.circular(10),
-        border:
-            Border.all(color: Colors.white.withValues(alpha: 0.08)),
+        border: Border.all(color: ZInk.panelBorder(context)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           if (diff.filePath != null)
             Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 10, vertical: 5),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
               decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.04),
-                borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(10)),
+                color: ZInk.tile(context),
+                borderRadius:
+                    const BorderRadius.vertical(top: Radius.circular(10)),
               ),
               child: Text(
                 diff.filePath!,
@@ -216,14 +214,14 @@ class DiffView extends StatelessWidget {
                 for (final line in diff.lines.take(400))
                   Container(
                     color: switch (line.type) {
-                      DiffLineType.added => const Color(0xFF22C55E)
-                          .withValues(alpha: 0.12),
-                      DiffLineType.removed => const Color(0xFFEF4444)
-                          .withValues(alpha: 0.12),
+                      DiffLineType.added =>
+                        const Color(0xFF22C55E).withValues(alpha: 0.12),
+                      DiffLineType.removed =>
+                        const Color(0xFFEF4444).withValues(alpha: 0.12),
                       DiffLineType.context => Colors.transparent,
                     },
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 1),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 1),
                     child: Text(
                       line.text.isEmpty ? ' ' : line.text,
                       style: TextStyle(
@@ -231,10 +229,12 @@ class DiffView extends StatelessWidget {
                         fontSize: 11,
                         height: 1.45,
                         color: switch (line.type) {
-                          DiffLineType.added =>
-                            const Color(0xFF86EFAC),
-                          DiffLineType.removed =>
-                            const Color(0xFFFCA5A5),
+                          DiffLineType.added => light
+                              ? const Color(0xFF166534)
+                              : const Color(0xFF86EFAC),
+                          DiffLineType.removed => light
+                              ? const Color(0xFF991B1B)
+                              : const Color(0xFFFCA5A5),
                           DiffLineType.context => ZInk.soft(context),
                         },
                       ),

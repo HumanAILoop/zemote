@@ -4143,7 +4143,7 @@ class _SlashCommandBar extends StatelessWidget {
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
+        border: Border.all(color: ZInk.panelBorder(context)),
       ),
       child: ListView(
         shrinkWrap: true,
