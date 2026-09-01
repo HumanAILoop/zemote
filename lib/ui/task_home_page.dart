@@ -17,6 +17,17 @@ import 'task_detail_page.dart';
 import 'theme.dart';
 import 'ui_settings.dart';
 
+String taskStatusLabel(String status) {
+  return switch (status) {
+    'running' || 'prewarming' => '运行中',
+    'completed' || 'completedSuccess' => '已完成',
+    'completedInterrupted' || 'cancelled' => '已停止',
+    'failed' || 'error' => '失败',
+    'draft' => '草稿',
+    _ => status.isEmpty ? '未开始' : status,
+  };
+}
+
 List<Map<String, dynamic>> mergeWorkspaceSessionTasks({
   required List<dynamic> channelTasks,
   required List<SessionEntry> sessions,
@@ -662,12 +673,61 @@ class _TaskHomePageState extends State<TaskHomePage>
     }).toList();
   }
 
+  List<dynamic> get _runningTasks => _tasks.where((task) {
+        final status = _taskStatus(task);
+        return status == 'running' || status == 'prewarming';
+      }).toList();
+
+  void _showMoreActions() {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.schedule_outlined),
+              title: const Text('定时任务'),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.of(this.context).push(MaterialPageRoute(
+                  builder: (_) => AutomationsPage(
+                    session: widget.session,
+                    scope: _scope,
+                    workspaceKey: _workspaceKey,
+                  ),
+                ));
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.refresh),
+              title: const Text('刷新任务'),
+              onTap: () {
+                Navigator.pop(context);
+                _load();
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.bolt_outlined),
+              title: const Text('命令面板与调试工具'),
+              onTap: () {
+                Navigator.pop(context);
+                _showCommandPalette();
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final running = _runningTasks;
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 8, 0),
+          padding: const EdgeInsets.fromLTRB(20, 18, 12, 0),
           child: Row(
             children: [
               Expanded(
@@ -701,30 +761,38 @@ class _TaskHomePageState extends State<TaskHomePage>
                 ),
               ),
               IconButton(
-                icon: const Icon(Icons.bolt_outlined),
-                tooltip: '命令面板',
-                onPressed: _showCommandPalette,
+                icon: const Icon(Icons.more_horiz),
+                tooltip: '更多',
+                onPressed: _showMoreActions,
               ),
-              IconButton(
-                icon: const Icon(Icons.add_comment_outlined),
-                tooltip: '新建任务',
-                onPressed: _newChat,
-              ),
-              IconButton(
-                icon: const Icon(Icons.schedule_outlined),
-                tooltip: '定时任务',
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => AutomationsPage(
-                      session: widget.session,
-                      scope: _scope,
-                      workspaceKey: _workspaceKey,
-                    ),
-                  ),
-                ),
-              ),
-              IconButton(icon: const Icon(Icons.refresh), onPressed: _load),
             ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 4),
+          child: _NewTaskHero(onTap: _newChat),
+        ),
+        if (running.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 4),
+            child: _RunningTasksSection(
+              tasks: running.take(1).toList(),
+              totalCount: running.length,
+              titleOf: _taskTitle,
+              statusOf: _taskStatus,
+              onOpen: _openTask,
+            ),
+          ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 8),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              '所有任务',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
           ),
         ),
         Padding(
@@ -776,6 +844,8 @@ class _TaskHomePageState extends State<TaskHomePage>
         ),
         TabBar(
           controller: _tabController,
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
           tabs: [
             Tab(text: '${tr(context, 'home.tab.tasks')} ${_tasks.length}'),
             Tab(text: '${tr(context, 'home.tab.pinned')} ${_pinned.length}'),
@@ -829,6 +899,176 @@ class _TaskHomePageState extends State<TaskHomePage>
                       ],
                     ),
         ),
+      ],
+    );
+  }
+}
+
+class _NewTaskHero extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _NewTaskHero({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: ZColors.primary,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 15, 12, 15),
+          child: Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.16),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.add, color: Colors.white),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '新建任务',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    SizedBox(height: 3),
+                    Text(
+                      '描述你想让桌面端完成的工作',
+                      style: TextStyle(color: Colors.white70, fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.arrow_forward, color: Colors.white70, size: 20),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _RunningTasksSection extends StatelessWidget {
+  final List<dynamic> tasks;
+  final int totalCount;
+  final String Function(dynamic) titleOf;
+  final String Function(dynamic) statusOf;
+  final void Function(Map<String, dynamic>) onOpen;
+
+  const _RunningTasksSection({
+    required this.tasks,
+    required this.totalCount,
+    required this.titleOf,
+    required this.statusOf,
+    required this.onOpen,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              '正在运行',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+              decoration: BoxDecoration(
+                color: ZColors.running.withValues(alpha: 0.14),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                '$totalCount',
+                style: const TextStyle(
+                  color: ZColors.running,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        ...tasks.map((raw) {
+          if (raw is! Map) return const SizedBox.shrink();
+          final task = raw.cast<String, dynamic>();
+          final preview = task['lastAssistantPreview'] as String?;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Card(
+              color: ZColors.running.withValues(alpha: 0.08),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: () => onOpen(task),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.sync, color: ZColors.running, size: 18),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              titleOf(task),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            if (preview != null && preview.isNotEmpty) ...[
+                              const SizedBox(height: 3),
+                              Text(
+                                preview,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: ZInk.muted(context),
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: 4),
+                            Text(
+                              '${taskStatusLabel(statusOf(task))} · ${relativeTime((task['updatedAt'] as num?)?.toInt())}',
+                              style: const TextStyle(
+                                color: ZColors.running,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Icon(Icons.chevron_right, color: ZInk.ghost(context)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        }),
       ],
     );
   }
@@ -915,10 +1155,25 @@ class _TaskList extends StatelessWidget {
         onRefresh: onRefresh,
         child: ListView(
           children: [
-            const SizedBox(height: 120),
+            const SizedBox(height: 96),
+            Icon(Icons.inbox_outlined, size: 42, color: ZInk.ghost(context)),
+            const SizedBox(height: 12),
             Center(
-              child:
-                  Text(emptyText, style: TextStyle(color: ZInk.faint(context))),
+              child: Text(
+                emptyText,
+                style: TextStyle(
+                  color: ZInk.muted(context),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Center(
+              child: Text(
+                '下拉刷新，或创建一个新任务',
+                style: TextStyle(color: ZInk.faint(context), fontSize: 12),
+              ),
             ),
           ],
         ),
@@ -939,6 +1194,7 @@ class _TaskList extends StatelessWidget {
           final preview = task['lastAssistantPreview'] as String?;
           final color = statusColor(status, context);
 
+          final label = taskStatusLabel(status);
           Widget tile = Card(
             child: InkWell(
               borderRadius: BorderRadius.circular(14),
@@ -950,10 +1206,23 @@ class _TaskList extends StatelessWidget {
                 child: Row(
                   children: [
                     Container(
-                      width: 8,
-                      height: 8,
-                      decoration:
-                          BoxDecoration(color: color, shape: BoxShape.circle),
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(11),
+                      ),
+                      child: Icon(
+                        status == 'running' || status == 'prewarming'
+                            ? Icons.sync
+                            : status == 'error' || status == 'failed'
+                                ? Icons.error_outline
+                                : status.contains('completed')
+                                    ? Icons.check
+                                    : Icons.chat_bubble_outline,
+                        size: 17,
+                        color: color,
+                      ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -990,17 +1259,46 @@ class _TaskList extends StatelessWidget {
                               ),
                             ),
                           const SizedBox(height: 3),
-                          Text(
-                            [
-                              if (status.isNotEmpty) status,
-                              if (task['model'] != null) '${task['model']}',
-                              relativeTime(
-                                  (task['updatedAt'] as num?)?.toInt()),
-                            ].where((s) => s.isNotEmpty).join(' · '),
-                            style: TextStyle(
-                                fontSize: 11, color: ZInk.faint(context)),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                          Row(
+                            children: [
+                              if (status.isNotEmpty)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 7, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: color.withValues(alpha: 0.12),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    label,
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: color,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              if (task['model'] != null) ...[
+                                const SizedBox(width: 7),
+                                Flexible(
+                                  child: Text(
+                                    '${task['model']}',
+                                    style: TextStyle(
+                                        fontSize: 11,
+                                        color: ZInk.faint(context)),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                              const Spacer(),
+                              Text(
+                                relativeTime(
+                                    (task['updatedAt'] as num?)?.toInt()),
+                                style: TextStyle(
+                                    fontSize: 11, color: ZInk.faint(context)),
+                              ),
+                            ],
                           ),
                         ],
                       ),

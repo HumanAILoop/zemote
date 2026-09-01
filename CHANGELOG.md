@@ -2,6 +2,17 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [0.5.2-beta.1] - 2026-09-01
+
+### Changed
+- 重构任务首页信息层级，突出新建任务和正在运行的任务。
+- 收拢低频操作入口，减少首页顶部工具栏噪音。
+- 升级任务卡片状态图标、状态标签、元信息和空状态表现。
+- 统一深色/浅色主题的导航栏、Tab、筛选 Chip 和按钮样式。
+
+### Fixed
+- 任务状态文案不再直接显示内部状态值，例如 `completedSuccess`。
+
 ## [0.5.1] - 2026-08-31
 
 ### Added

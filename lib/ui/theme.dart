@@ -210,6 +210,34 @@ ThemeData buildDarkTheme() {
       unselectedLabelColor: Colors.white38,
       indicatorColor: ZColors.primary,
       dividerColor: ZColors.darkBorder,
+      labelStyle: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+      unselectedLabelStyle: TextStyle(fontSize: 13),
+    ),
+    navigationBarTheme: NavigationBarThemeData(
+      height: 68,
+      backgroundColor: ZColors.darkSurface,
+      indicatorColor: ZColors.primary.withValues(alpha: 0.18),
+      labelTextStyle: WidgetStateProperty.resolveWith((states) => TextStyle(
+            fontSize: 12,
+            fontWeight: states.contains(WidgetState.selected)
+                ? FontWeight.w600
+                : FontWeight.w400,
+          )),
+    ),
+    chipTheme: ChipThemeData(
+      backgroundColor: Colors.white.withValues(alpha: 0.04),
+      selectedColor: ZColors.primary.withValues(alpha: 0.18),
+      side: const BorderSide(color: ZColors.darkBorder),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      labelStyle: const TextStyle(fontSize: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+    ),
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(
+        minimumSize: const Size(0, 46),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        textStyle: const TextStyle(fontWeight: FontWeight.w600),
+      ),
     ),
     textTheme: const TextTheme(
       bodyMedium: TextStyle(color: Colors.white, fontSize: 14, height: 1.5),
@@ -293,6 +321,34 @@ ThemeData buildLightTheme() {
       unselectedLabelColor: Colors.black38,
       indicatorColor: ZColors.primaryDim,
       dividerColor: ZColors.lightBorder,
+      labelStyle: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+      unselectedLabelStyle: TextStyle(fontSize: 13),
+    ),
+    navigationBarTheme: NavigationBarThemeData(
+      height: 68,
+      backgroundColor: ZColors.lightSurface,
+      indicatorColor: ZColors.primary.withValues(alpha: 0.12),
+      labelTextStyle: WidgetStateProperty.resolveWith((states) => TextStyle(
+            fontSize: 12,
+            fontWeight: states.contains(WidgetState.selected)
+                ? FontWeight.w600
+                : FontWeight.w400,
+          )),
+    ),
+    chipTheme: ChipThemeData(
+      backgroundColor: const Color(0xFFF1F5F9),
+      selectedColor: ZColors.primary.withValues(alpha: 0.12),
+      side: const BorderSide(color: ZColors.lightBorder),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      labelStyle: const TextStyle(fontSize: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+    ),
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(
+        minimumSize: const Size(0, 46),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        textStyle: const TextStyle(fontWeight: FontWeight.w600),
+      ),
     ),
   );
 }
