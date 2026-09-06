@@ -50,32 +50,35 @@ class SettingsPage extends StatelessWidget {
         Text(tr(context, 'settings.title'),
             style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
         const SizedBox(height: 20),
+        _sectionTitle(context, tr(context, 'settings.section.general')),
+        const SizedBox(height: 10),
         Card(
           child: ListTile(
             leading: const Icon(Icons.system_update_alt, size: 20),
-            title: const Text('检查更新'),
-            subtitle: Text('当前版本 v$appVersion · 检测 GitHub 最新发布',
+            title: Text(tr(context, 'settings.checkUpdate')),
+            subtitle: Text(
+                '${tr(context, 'settings.version')}v$appVersion · ${tr(context, 'settings.version.hint')}',
                 style: const TextStyle(fontSize: 12)),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => _checkUpdates(context),
           ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 10),
         const _BetaUpdateSetting(),
         Card(
           child: ListTile(
             leading: const Icon(Icons.mic_none_outlined, size: 20),
-            title: const Text('离线语音输入'),
-            subtitle:
-                const Text('下载、启用和管理本地语音识别模型', style: TextStyle(fontSize: 12)),
+            title: Text(tr(context, 'settings.voiceInput')),
+            subtitle: Text(tr(context, 'settings.voiceInput.subtitle'),
+                style: const TextStyle(fontSize: 12)),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const VoiceModelsPage()),
             ),
           ),
         ),
-        const SizedBox(height: 12),
-        if (controller != null)
+        if (controller != null) ...[
+          const SizedBox(height: 10),
           Card(
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -179,104 +182,20 @@ class SettingsPage extends StatelessWidget {
               ),
             ),
           ),
-        const SizedBox(height: 12),
-        Card(
-          child: Column(
-            children: [
-              ListTile(
-                leading: const Icon(Icons.terminal, size: 20),
-                title: const Text('协议日志'),
-                subtitle: const Text('查看 relay / IPC / V4 帧日志',
-                    style: TextStyle(fontSize: 12)),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.of(context)
-                    .push(MaterialPageRoute(builder: (_) => const LogPage())),
-              ),
-              _VerboseFramesSetting(),
-              const Divider(indent: 52),
-              ListTile(
-                leading: const Icon(Icons.health_and_safety_outlined, size: 20),
-                title: const Text('诊断中心'),
-                subtitle: const Text('连接状态、订阅状态和故障记录',
-                    style: TextStyle(fontSize: 12)),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => DiagnosticsPage(
-                      client: client,
-                      bridge: bridge,
-                    ),
-                  ),
-                ),
-              ),
-              if (client != null) ...[
-                const Divider(indent: 52),
-                ListTile(
-                  leading: const Icon(Icons.bug_report_outlined, size: 20),
-                  title: const Text('RPC 调试器'),
-                  subtitle: const Text('发送原始 relay payload',
-                      style: TextStyle(fontSize: 12)),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => RpcExplorerPage(client: client!))),
-                ),
-              ],
-              if (bridge != null) ...[
-                const Divider(indent: 52),
-                ListTile(
-                  leading: const Icon(Icons.extension_outlined, size: 20),
-                  title: const Text('服务管理'),
-                  subtitle: const Text('插件 / 定时任务 / MCP / Skills',
-                      style: TextStyle(fontSize: 12)),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => ServicesPage(
-                            session: bridge!,
-                            scope: _scopeOf(bridge!),
-                          ))),
-                ),
-                const Divider(indent: 52),
-                ListTile(
-                  leading: const Icon(Icons.query_stats, size: 20),
-                  title: const Text('用量'),
-                  subtitle: const Text('额度 / 配额限制 / 订阅详情',
-                      style: TextStyle(fontSize: 12)),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => UsagePage(session: bridge!))),
-                ),
-                const Divider(indent: 52),
-                ListTile(
-                  leading: const Icon(Icons.model_training, size: 20),
-                  title: const Text('模型供应商'),
-                  subtitle: const Text('添加 / 启停 / 删除模型供应商',
-                      style: TextStyle(fontSize: 12)),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => ModelProvidersPage(session: bridge!))),
-                ),
-                const Divider(indent: 52),
-                ListTile(
-                  leading: const Icon(Icons.hub_outlined, size: 20),
-                  title: const Text('Channel RPC 调试器'),
-                  subtitle: const Text(
-                      '调用任意 channel 方法（zcode-task / skills / mcp …）',
-                      style: TextStyle(fontSize: 12)),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => ChannelExplorerPage(session: bridge!))),
-                ),
-              ],
-            ],
-          ),
-        ),
-        const SizedBox(height: 12),
+        ],
+        const SizedBox(height: 20),
+        _sectionTitle(context, tr(context, 'settings.section.advanced')),
+        const SizedBox(height: 10),
+        _buildAdvancedCard(context),
+        const SizedBox(height: 20),
+        _sectionTitle(context, tr(context, 'settings.section.device')),
+        const SizedBox(height: 10),
         Card(
           child: ListTile(
             leading:
                 const Icon(Icons.link_off, color: ZColors.danger, size: 20),
-            title:
-                const Text('断开当前设备', style: TextStyle(color: ZColors.danger)),
+            title: Text(tr(context, 'settings.disconnect'),
+                style: const TextStyle(color: ZColors.danger)),
             onTap: onDisconnect,
           ),
         ),
@@ -304,11 +223,121 @@ class SettingsPage extends StatelessWidget {
     );
   }
 
+  Widget _sectionTitle(BuildContext context, String text) => Text(
+        text,
+        style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: ZInk.muted(context)),
+      );
+
+  /// Debug / advanced tools grouped into a collapsible section so the main
+  /// settings list stays concise (issue #7).
+  Widget _buildAdvancedCard(BuildContext context) {
+    final client = this.client;
+    final bridge = this.bridge;
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: ExpansionTile(
+        shape: const Border(),
+        collapsedShape: const Border(),
+        leading: const Icon(Icons.build_outlined, size: 20),
+        title: Text(tr(context, 'settings.section.advanced'),
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+        children: [
+          ListTile(
+            leading: const Icon(Icons.terminal, size: 20),
+            title: Text(tr(context, 'settings.log')),
+            subtitle: Text(tr(context, 'settings.log.subtitle'),
+                style: const TextStyle(fontSize: 12)),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context)
+                .push(MaterialPageRoute(builder: (_) => const LogPage())),
+          ),
+          const _VerboseFramesSetting(),
+          const Divider(indent: 52),
+          ListTile(
+            leading: const Icon(Icons.health_and_safety_outlined, size: 20),
+            title: Text(tr(context, 'settings.diagnostics')),
+            subtitle: Text(tr(context, 'settings.diagnostics.subtitle'),
+                style: const TextStyle(fontSize: 12)),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => DiagnosticsPage(
+                  client: client,
+                  bridge: bridge,
+                ),
+              ),
+            ),
+          ),
+          if (client != null) ...[
+            const Divider(indent: 52),
+            ListTile(
+              leading: const Icon(Icons.bug_report_outlined, size: 20),
+              title: Text(tr(context, 'settings.rpc')),
+              subtitle: Text(tr(context, 'settings.rpc.subtitle'),
+                  style: const TextStyle(fontSize: 12)),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => RpcExplorerPage(client: client))),
+            ),
+          ],
+          if (bridge != null) ...[
+            const Divider(indent: 52),
+            ListTile(
+              leading: const Icon(Icons.extension_outlined, size: 20),
+              title: Text(tr(context, 'settings.services')),
+              subtitle: Text(tr(context, 'settings.services.subtitle'),
+                  style: const TextStyle(fontSize: 12)),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => ServicesPage(
+                        session: bridge,
+                        scope: _scopeOf(bridge),
+                      ))),
+            ),
+            const Divider(indent: 52),
+            ListTile(
+              leading: const Icon(Icons.query_stats, size: 20),
+              title: Text(tr(context, 'settings.usage')),
+              subtitle: Text(tr(context, 'settings.usage.subtitle'),
+                  style: const TextStyle(fontSize: 12)),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => UsagePage(session: bridge))),
+            ),
+            const Divider(indent: 52),
+            ListTile(
+              leading: const Icon(Icons.model_training, size: 20),
+              title: Text(tr(context, 'settings.models')),
+              subtitle: Text(tr(context, 'settings.models.subtitle'),
+                  style: const TextStyle(fontSize: 12)),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => ModelProvidersPage(session: bridge))),
+            ),
+            const Divider(indent: 52),
+            ListTile(
+              leading: const Icon(Icons.hub_outlined, size: 20),
+              title: Text(tr(context, 'settings.channelRpc')),
+              subtitle: Text(tr(context, 'settings.channelRpc.subtitle'),
+                  style: const TextStyle(fontSize: 12)),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => ChannelExplorerPage(session: bridge))),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   Future<void> _copyUrl(BuildContext context, String url) async {
     await Clipboard.setData(ClipboardData(text: url));
     if (context.mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('已复制 GitHub 链接')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(tr(context, 'settings.copyLink'))));
     }
   }
 
@@ -318,16 +347,17 @@ class SettingsPage extends StatelessWidget {
     showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => const Center(
+      builder: (_) => Center(
         child: Card(
           child: Padding(
-            padding: EdgeInsets.all(20),
+            padding: const EdgeInsets.all(20),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                CircularProgressIndicator(),
-                SizedBox(height: 12),
-                Text('正在检查更新…', style: TextStyle(fontSize: 13)),
+                const CircularProgressIndicator(),
+                const SizedBox(height: 12),
+                Text(tr(context, 'settings.checking'),
+                    style: const TextStyle(fontSize: 13)),
               ],
             ),
           ),
@@ -342,19 +372,21 @@ class SettingsPage extends StatelessWidget {
       if (info.isNewer) {
         await showUpdateDialog(context, info);
       } else {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('已是最新版本 v$appVersion')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('${tr(context, 'settings.upToDate')}v$appVersion')));
       }
     } catch (e) {
       if (!context.mounted) return;
       Navigator.of(context).pop();
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('检查更新失败: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('${tr(context, 'settings.checkFailed')}$e')));
     }
   }
 }
 
 class _VerboseFramesSetting extends StatefulWidget {
+  const _VerboseFramesSetting();
+
   @override
   State<_VerboseFramesSetting> createState() => _VerboseFramesSettingState();
 }
@@ -363,9 +395,9 @@ class _VerboseFramesSettingState extends State<_VerboseFramesSetting> {
   @override
   Widget build(BuildContext context) => SwitchListTile(
         secondary: const Icon(Icons.article_outlined, size: 20),
-        title: const Text('协议帧日志（详细）'),
-        subtitle:
-            const Text('记录完整 relay 帧，可能包含敏感数据', style: TextStyle(fontSize: 12)),
+        title: Text(tr(context, 'settings.verboseFrames')),
+        subtitle: Text(tr(context, 'settings.verboseFrames.subtitle'),
+            style: const TextStyle(fontSize: 12)),
         value: RelayClient.verboseFrames,
         onChanged: (value) async {
           RelayClient.verboseFrames = value;
@@ -407,13 +439,13 @@ class _BetaUpdateSettingState extends State<_BetaUpdateSetting> {
                 : Icons.verified_outlined,
             size: 20,
           ),
-          title: const Text('接收 Beta 更新'),
+          title: Text(tr(context, 'settings.betaUpdates')),
           subtitle: Text(
             _loading
-                ? '正在读取更新通道…'
+                ? tr(context, 'settings.betaUpdates.reading')
                 : _settings.receiveBetaUpdates
-                    ? '当前通道：稳定版 + Beta 版'
-                    : '当前通道：稳定版（推荐）',
+                    ? tr(context, 'settings.betaUpdates.beta')
+                    : tr(context, 'settings.betaUpdates.stable'),
             style: const TextStyle(fontSize: 12),
           ),
           value: !_loading && _settings.receiveBetaUpdates,

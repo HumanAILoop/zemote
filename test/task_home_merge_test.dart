@@ -4,6 +4,34 @@ import 'package:zemote/protocol/conversation.dart';
 import 'package:zemote/ui/task_home_page.dart';
 
 void main() {
+  test('stabilizeTaskOrder preserves order when task set is unchanged', () {
+    final current = [
+      {'taskId': 'a', 'updatedAt': 5, 'title': 'old a'},
+      {'taskId': 'b', 'updatedAt': 4, 'title': 'old b'},
+    ];
+    final merged = [
+      {'taskId': 'b', 'updatedAt': 9, 'title': 'new b'},
+      {'taskId': 'a', 'updatedAt': 3, 'title': 'new a'},
+    ];
+    final result = stabilizeTaskOrder(current, merged);
+    expect(result.map((t) => t['taskId']), ['a', 'b']);
+    expect(result[0]['title'], 'new a');
+    expect(result[1]['title'], 'new b');
+  });
+
+  test('stabilizeTaskOrder re-sorts when a task is added or removed', () {
+    final current = [
+      {'taskId': 'a', 'updatedAt': 5},
+    ];
+    final added = [
+      {'taskId': 'b', 'updatedAt': 9},
+      {'taskId': 'a', 'updatedAt': 5},
+    ];
+    expect(
+        stabilizeTaskOrder(current, added).map((t) => t['taskId']), ['b', 'a']);
+    expect(stabilizeTaskOrder(current, const []), isEmpty);
+  });
+
   test('sessions-index adds new workspace sessions and refreshes stale fields',
       () {
     final result = mergeWorkspaceSessionTasks(

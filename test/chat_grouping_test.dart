@@ -62,6 +62,57 @@ void main() {
     expect(steps!.single.content, '写测试');
   });
 
+  test('derivePlanSteps parses a plan object with a title and nested steps',
+      () {
+    final steps = derivePlanSteps(
+      rows: const [],
+      snapshotPlan: {
+        'title': '修复登录问题',
+        'steps': [
+          {'title': '检查 token', 'status': 'completed'},
+          {'title': '补充测试', 'status': 'pending'},
+        ],
+      },
+    );
+
+    expect(steps?.map((step) => step.content), ['检查 token', '补充测试']);
+  });
+
+  test('deriveBestPlanSteps falls back to RPC when snapshot plan is empty', () {
+    final steps = deriveBestPlanSteps(
+      rows: const [],
+      snapshotPlan: const {'plan': []},
+      rpcPlan: {
+        'plans': [
+          {
+            'steps': [
+              {'content': '批准后继续执行', 'status': 'in_progress'},
+            ],
+          },
+        ],
+      },
+    );
+
+    expect(steps?.single.content, '批准后继续执行');
+  });
+
+  test('interaction option answer keeps the selected plan approval option', () {
+    final answer = interactionOptionAnswer({
+      'optionId': 'approve-plan',
+      'value': 'approve',
+      'label': '批准计划',
+      'kind': 'accept',
+    });
+
+    expect(answer['optionId'], 'approve-plan');
+    expect(answer['action'], 'accept');
+    expect(answer['content'], {
+      'value': 'approve',
+      'label': '批准计划',
+      'kind': 'accept',
+    });
+  });
+
   test('duplicate text confirmations retire echoes one at a time', () {
     final List<Map<String, dynamic>> echoes = [
       {'text': 'same', 'status': 'sent'},

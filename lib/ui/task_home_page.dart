@@ -28,6 +28,35 @@ String taskStatusLabel(String status) {
   };
 }
 
+/// Keeps [current] ordering when the visible task set is unchanged, only
+/// refreshing fields. When a task is added/removed (or [current] is empty)
+/// the freshly-sorted [merged] list is returned. This prevents running tasks
+/// from jumping around as their `updatedAt` bumps during live updates.
+List<Map<String, dynamic>> stabilizeTaskOrder(
+  List<dynamic> current,
+  List<Map<String, dynamic>> merged,
+) {
+  final currentIds = current
+      .whereType<Map>()
+      .map((t) => '${t['taskId'] ?? ''}')
+      .where((id) => id.isNotEmpty)
+      .toSet();
+  final newIds = merged
+      .map((t) => '${t['taskId'] ?? ''}')
+      .where((id) => id.isNotEmpty)
+      .toSet();
+  if (current.isEmpty ||
+      currentIds.length != newIds.length ||
+      !currentIds.containsAll(newIds)) {
+    return merged;
+  }
+  final byId = {for (final t in merged) '${t['taskId']}': t};
+  return [
+    for (final t in current)
+      if (t is Map && byId['${t['taskId']}'] != null) byId['${t['taskId']}']!,
+  ];
+}
+
 List<Map<String, dynamic>> mergeWorkspaceSessionTasks({
   required List<dynamic> channelTasks,
   required List<SessionEntry> sessions,
@@ -237,7 +266,7 @@ class _TaskHomePageState extends State<TaskHomePage>
 
   void _rebuildTasks() {
     final sessions = _sessionsSub?.state.list ?? const <SessionEntry>[];
-    _tasks = mergeWorkspaceSessionTasks(
+    final merged = mergeWorkspaceSessionTasks(
       channelTasks: _channelTasks.where((task) {
         if (task is! Map || task['taskId'] == null) return false;
         return !_isRecentlyRemoved('${task['taskId']}');
@@ -249,6 +278,11 @@ class _TaskHomePageState extends State<TaskHomePage>
       archivedIds: _archivedIds,
       workspace: widget.workspace,
     );
+    // Keep the current order on live updates when the visible task set is
+    // unchanged. Re-sorting by updatedAt on every sessions-index/workspace
+    // frame makes running tasks jump around and flicker; only re-sort when a
+    // task was added or removed (or on a full load).
+    _tasks = stabilizeTaskOrder(_tasks, merged);
   }
 
   Future<void> _loadCache() async {

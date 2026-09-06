@@ -23,7 +23,10 @@ class PlanStep {
   const PlanStep({required this.content, this.status = 'pending'});
 
   bool get completed =>
-      status == 'completed' || status == 'done' || status == 'complete';
+      status == 'completed' ||
+      status == 'done' ||
+      status == 'complete' ||
+      status == 'completedSuccess';
 }
 
 /// Extracts the latest plan from the live snapshot or plan-writing tool rows.
@@ -48,6 +51,37 @@ List<PlanStep>? derivePlanSteps({
   return null;
 }
 
+/// Prefer the source that contains actual steps. After an interaction is
+/// accepted, the conversation snapshot can briefly contain an empty or
+/// summary-only `plan` while conversationPlansV4 still has the full plan.
+List<PlanStep>? deriveBestPlanSteps({
+  required List<Map<String, dynamic>> rows,
+  Object? snapshotPlan,
+  Object? rpcPlan,
+}) {
+  final fromSnapshot = derivePlanSteps(
+    rows: rows,
+    snapshotPlan: snapshotPlan,
+  );
+  if (fromSnapshot != null && fromSnapshot.isNotEmpty) return fromSnapshot;
+  final fromRpc = derivePlanSteps(rows: rows, snapshotPlan: rpcPlan);
+  if (fromRpc != null && fromRpc.isNotEmpty) return fromRpc;
+  return fromSnapshot ?? fromRpc;
+}
+
+Map<String, dynamic> interactionOptionAnswer(Map option) {
+  final optionId = option['optionId'];
+  final content = <String, dynamic>{
+    for (final key in const ['value', 'label', 'kind'])
+      if (option[key] != null) key: option[key],
+  };
+  return {
+    if (optionId != null) 'optionId': '$optionId',
+    'action': 'accept',
+    'content': content,
+  };
+}
+
 bool _isPlanTool(Map<String, dynamic> row) {
   final name = '${row['toolName'] ?? row['name'] ?? ''}'.toLowerCase();
   return name.contains('todowrite') ||
@@ -55,6 +89,13 @@ bool _isPlanTool(Map<String, dynamic> row) {
       name.contains('update_plan') ||
       name.contains('update-plan');
 }
+
+bool _looksLikePlanStep(Map value) =>
+    value['content'] != null ||
+    value['step'] != null ||
+    value['text'] != null ||
+    value['activeForm'] != null ||
+    value['label'] != null;
 
 List<PlanStep>? _parsePlanValue(Object? value) {
   Object? decoded = value;
@@ -69,6 +110,20 @@ List<PlanStep>? _parsePlanValue(Object? value) {
     for (final key in const ['todos', 'plan', 'plans', 'steps', 'items']) {
       final result = _parsePlanValue(decoded[key]);
       if (result != null) return result;
+    }
+    if (_looksLikePlanStep(decoded)) {
+      final content =
+          '${decoded['content'] ?? decoded['step'] ?? decoded['title'] ?? decoded['text'] ?? decoded['activeForm'] ?? decoded['label']}'
+              .trim();
+      if (content.isNotEmpty) {
+        return [
+          PlanStep(
+            content: content,
+            status:
+                '${decoded['status'] ?? (decoded['completed'] == true || decoded['done'] == true ? 'completed' : 'pending')}',
+          ),
+        ];
+      }
     }
     return null;
   }
@@ -2487,9 +2542,10 @@ class _PlanBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final steps = derivePlanSteps(
+    final steps = deriveBestPlanSteps(
       rows: state.rows,
-      snapshotPlan: state.plan ?? rpcPlan,
+      snapshotPlan: state.plan,
+      rpcPlan: rpcPlan,
     );
     if ((steps == null || steps.isEmpty) && state.currentMode != 'plan') {
       return const SizedBox.shrink();
@@ -2643,9 +2699,10 @@ class _ConversationInsightsState extends State<_ConversationInsights> {
 
   @override
   Widget build(BuildContext context) {
-    final steps = derivePlanSteps(
+    final steps = deriveBestPlanSteps(
       rows: widget.state.rows,
-      snapshotPlan: widget.state.plan ?? widget.rpcPlan,
+      snapshotPlan: widget.state.plan,
+      rpcPlan: widget.rpcPlan,
     );
     final works = widget.state.backgroundWorks;
     final hasPlan = (steps?.isNotEmpty ?? false) ||
@@ -3403,9 +3460,15 @@ class _InteractionCardState extends State<_InteractionCard> {
                       ),
                       onPressed: _busy
                           ? null
-                          : () => kind == 'permission'
-                              ? _resolve(optionId: '${option['optionId']}')
-                              : _resolve(action: 'accept', content: {}),
+                          : () {
+                              final answer = interactionOptionAnswer(option);
+                              _resolve(
+                                optionId: answer['optionId'] as String?,
+                                action: answer['action'] as String,
+                                content: (answer['content'] as Map)
+                                    .cast<String, dynamic>(),
+                              );
+                            },
                       child: Text(
                         _optionLabel(option),
                         style: const TextStyle(fontSize: 12),
