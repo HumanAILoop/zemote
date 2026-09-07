@@ -430,6 +430,8 @@ class _MainShellContentState extends State<_MainShellContent> {
   /// when scrolling up (mirrors common app behavior, issue #6).
   bool _onScroll(ScrollNotification notification) {
     if (notification.metrics.axis != Axis.vertical) return false;
+    // Tablet layout uses a persistent NavigationRail, no bottom nav to hide.
+    if (MediaQuery.sizeOf(context).width >= 720) return false;
     final delta = notification.metrics.pixels - _lastScrollOffset;
     _lastScrollOffset = notification.metrics.pixels;
     if (delta.abs() < 4) return false;

@@ -161,6 +161,7 @@ class ChatPage extends StatefulWidget {
   final String workspaceKey;
   final String? sessionId;
   final String title;
+  final bool showBackButton;
 
   const ChatPage({
     super.key,
@@ -169,6 +170,7 @@ class ChatPage extends StatefulWidget {
     required this.workspaceKey,
     this.sessionId,
     required this.title,
+    this.showBackButton = true,
   });
 
   @override
@@ -966,6 +968,7 @@ class _ChatPageState extends State<ChatPage> {
     final state = _state;
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: widget.showBackButton,
         titleSpacing: 0,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,

@@ -2,6 +2,11 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [0.5.3-beta.4] - 2026-09-01
+
+### Added
+- 平板主从布局：宽屏下任务列表在左、选中对话在右，无需跳页即可切换任务。
+
 ## [0.5.3-beta.3] - 2026-09-01
 
 ### Changed
