@@ -794,147 +794,157 @@ class _TaskHomePageState extends State<TaskHomePage>
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 6, 8, 2),
-          child: Row(
-            children: [
-              Expanded(
-                child: _searchOpen
-                    ? TextField(
-                        controller: _searchController,
-                        autofocus: true,
-                        style: const TextStyle(fontSize: 14),
-                        decoration: InputDecoration(
-                          hintText: tr(context, 'home.search'),
-                          prefixIcon: const Icon(Icons.search, size: 19),
-                          isDense: true,
-                          contentPadding:
-                              const EdgeInsets.symmetric(vertical: 9),
-                        ),
-                        onChanged: (value) => setState(() => _query = value),
-                      )
-                    : InkWell(
-                        borderRadius: BorderRadius.circular(10),
-                        onTap: widget.workspaces.length > 1
-                            ? widget.onSwitchWorkspace
-                            : null,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Flexible(
-                                child: Text(
-                                  workspaceTitle(widget.workspace),
-                                  style: const TextStyle(
-                                      fontSize: 20,
-                                      fontWeight: FontWeight.w700),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 900),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 6, 8, 2),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _searchOpen
+                        ? TextField(
+                            controller: _searchController,
+                            autofocus: true,
+                            style: const TextStyle(fontSize: 14),
+                            decoration: InputDecoration(
+                              hintText: tr(context, 'home.search'),
+                              prefixIcon: const Icon(Icons.search, size: 19),
+                              isDense: true,
+                              contentPadding:
+                                  const EdgeInsets.symmetric(vertical: 9),
+                            ),
+                            onChanged: (value) =>
+                                setState(() => _query = value),
+                          )
+                        : InkWell(
+                            borderRadius: BorderRadius.circular(10),
+                            onTap: widget.workspaces.length > 1
+                                ? widget.onSwitchWorkspace
+                                : null,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Flexible(
+                                    child: Text(
+                                      workspaceTitle(widget.workspace),
+                                      style: const TextStyle(
+                                          fontSize: 20,
+                                          fontWeight: FontWeight.w700),
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                  if (widget.workspaces.length > 1)
+                                    Icon(Icons.keyboard_arrow_down,
+                                        color: ZInk.faint(context), size: 19),
+                                ],
                               ),
-                              if (widget.workspaces.length > 1)
-                                Icon(Icons.keyboard_arrow_down,
-                                    color: ZInk.faint(context), size: 19),
-                            ],
+                            ),
                           ),
+                  ),
+                  IconButton(
+                    icon: Icon(_searchOpen ? Icons.close : Icons.search),
+                    tooltip: _searchOpen ? '关闭搜索' : '搜索',
+                    onPressed: () {
+                      setState(() {
+                        _searchOpen = !_searchOpen;
+                        if (!_searchOpen) {
+                          _searchController.clear();
+                          _query = '';
+                        }
+                      });
+                    },
+                  ),
+                  IconButton(
+                    icon: Badge(
+                      isLabelVisible: _statusFilter != 'all',
+                      child: const Icon(Icons.filter_list),
+                    ),
+                    tooltip: '筛选',
+                    onPressed: _showStatusFilter,
+                  ),
+                  IconButton.filled(
+                    icon: const Icon(Icons.add, size: 20),
+                    tooltip: '新建任务',
+                    onPressed: _newChat,
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.more_horiz),
+                    tooltip: '更多',
+                    onPressed: _showMoreActions,
+                  ),
+                ],
+              ),
+            ),
+            TabBar(
+              controller: _tabController,
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
+              labelPadding: const EdgeInsets.symmetric(horizontal: 16),
+              tabs: [
+                Tab(text: '${tr(context, 'home.tab.tasks')} ${_tasks.length}'),
+                Tab(
+                    text:
+                        '${tr(context, 'home.tab.pinned')} ${_pinned.length}'),
+                Tab(
+                    text:
+                        '${tr(context, 'home.tab.archived')} ${_archived.length}'),
+              ],
+            ),
+            Expanded(
+              child: _loading
+                  ? const _TaskListSkeleton()
+                  : _error != null
+                      ? Center(child: Text('加载失败: $_error'))
+                      : TabBarView(
+                          controller: _tabController,
+                          children: [
+                            _TaskList(
+                              tasks: _filtered(_tasks),
+                              emptyText: tr(context, 'home.empty.tasks'),
+                              onRefresh: _load,
+                              onOpen: _openTask,
+                              onActions: (t) =>
+                                  _showActions(t, archived: false),
+                              titleOf: _taskTitle,
+                              statusOf: _taskStatus,
+                              onPin: (t) => _setPinned(t, true),
+                              onArchive: _archive,
+                            ),
+                            _TaskList(
+                              tasks: _filtered(_pinned),
+                              emptyText: tr(context, 'home.empty.pinned'),
+                              onRefresh: _load,
+                              onOpen: _openTask,
+                              onActions: (t) =>
+                                  _showActions(t, archived: false),
+                              titleOf: _taskTitle,
+                              statusOf: _taskStatus,
+                              onPin: (t) => _setPinned(t, false),
+                              onArchive: _archive,
+                            ),
+                            _TaskList(
+                              tasks: _filtered(_archived),
+                              emptyText: tr(context, 'home.empty.archived'),
+                              onRefresh: _load,
+                              onOpen: _openTask,
+                              onActions: (t) => _showActions(t, archived: true),
+                              titleOf: _taskTitle,
+                              statusOf: _taskStatus,
+                              onPin: _unarchive,
+                              startIcon: const Icon(Icons.unarchive_outlined,
+                                  color: ZColors.warning),
+                            ),
+                          ],
                         ),
-                      ),
-              ),
-              IconButton(
-                icon: Icon(_searchOpen ? Icons.close : Icons.search),
-                tooltip: _searchOpen ? '关闭搜索' : '搜索',
-                onPressed: () {
-                  setState(() {
-                    _searchOpen = !_searchOpen;
-                    if (!_searchOpen) {
-                      _searchController.clear();
-                      _query = '';
-                    }
-                  });
-                },
-              ),
-              IconButton(
-                icon: Badge(
-                  isLabelVisible: _statusFilter != 'all',
-                  child: const Icon(Icons.filter_list),
-                ),
-                tooltip: '筛选',
-                onPressed: _showStatusFilter,
-              ),
-              IconButton.filled(
-                icon: const Icon(Icons.add, size: 20),
-                tooltip: '新建任务',
-                onPressed: _newChat,
-              ),
-              IconButton(
-                icon: const Icon(Icons.more_horiz),
-                tooltip: '更多',
-                onPressed: _showMoreActions,
-              ),
-            ],
-          ),
-        ),
-        TabBar(
-          controller: _tabController,
-          isScrollable: true,
-          tabAlignment: TabAlignment.start,
-          labelPadding: const EdgeInsets.symmetric(horizontal: 16),
-          tabs: [
-            Tab(text: '${tr(context, 'home.tab.tasks')} ${_tasks.length}'),
-            Tab(text: '${tr(context, 'home.tab.pinned')} ${_pinned.length}'),
-            Tab(
-                text:
-                    '${tr(context, 'home.tab.archived')} ${_archived.length}'),
+            ),
           ],
         ),
-        Expanded(
-          child: _loading
-              ? const _TaskListSkeleton()
-              : _error != null
-                  ? Center(child: Text('加载失败: $_error'))
-                  : TabBarView(
-                      controller: _tabController,
-                      children: [
-                        _TaskList(
-                          tasks: _filtered(_tasks),
-                          emptyText: tr(context, 'home.empty.tasks'),
-                          onRefresh: _load,
-                          onOpen: _openTask,
-                          onActions: (t) => _showActions(t, archived: false),
-                          titleOf: _taskTitle,
-                          statusOf: _taskStatus,
-                          onPin: (t) => _setPinned(t, true),
-                          onArchive: _archive,
-                        ),
-                        _TaskList(
-                          tasks: _filtered(_pinned),
-                          emptyText: tr(context, 'home.empty.pinned'),
-                          onRefresh: _load,
-                          onOpen: _openTask,
-                          onActions: (t) => _showActions(t, archived: false),
-                          titleOf: _taskTitle,
-                          statusOf: _taskStatus,
-                          onPin: (t) => _setPinned(t, false),
-                          onArchive: _archive,
-                        ),
-                        _TaskList(
-                          tasks: _filtered(_archived),
-                          emptyText: tr(context, 'home.empty.archived'),
-                          onRefresh: _load,
-                          onOpen: _openTask,
-                          onActions: (t) => _showActions(t, archived: true),
-                          titleOf: _taskTitle,
-                          statusOf: _taskStatus,
-                          onPin: _unarchive,
-                          startIcon: const Icon(Icons.unarchive_outlined,
-                              color: ZColors.warning),
-                        ),
-                      ],
-                    ),
-        ),
-      ],
+      ),
     );
   }
 }

@@ -1032,175 +1032,183 @@ class _ChatPageState extends State<ChatPage> {
             ),
         ],
       ),
-      body: Column(
-        children: [
-          if (_error != null)
-            Material(
-              color: ZColors.danger.withValues(alpha: 0.15),
-              child: ListTile(
-                dense: true,
-                title:
-                    Text('订阅失败: $_error', style: const TextStyle(fontSize: 12)),
-                trailing:
-                    TextButton(onPressed: _subscribe, child: const Text('重试')),
-              ),
-            ),
-          if (state != null)
-            AnimatedBuilder(
-              animation: state,
-              builder: (context, _) => _ContextUsageBar(state: state),
-            ),
-          Expanded(
-            child: state == null
-                ? Center(
-                    child: _sessionId == null
-                        ? Text('输入消息开始新会话',
-                            style: TextStyle(color: ZInk.faint(context)))
-                        : const CircularProgressIndicator(),
-                  )
-                : !state.ready
-                    ? const Center(child: CircularProgressIndicator())
-                    : AnimatedBuilder(
-                        animation: state,
-                        builder: (context, _) {
-                          final groups = _groupRows(state.rows);
-                          final itemCount = groups.length +
-                              _echoes.length +
-                              (state.canLoadOlder ? 1 : 0);
-                          if (groups.isEmpty &&
-                              _echoes.isEmpty &&
-                              !state.canLoadOlder) {
-                            return Center(
-                                child: Text('暂无消息',
-                                    style:
-                                        TextStyle(color: ZInk.faint(context))));
-                          }
-                          return ListView.builder(
-                            controller: _scrollController,
-                            padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
-                            itemCount: itemCount,
-                            itemBuilder: (context, index) {
-                              if (state.canLoadOlder && index == 0) {
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 760),
+          child: Column(
+            children: [
+              if (_error != null)
+                Material(
+                  color: ZColors.danger.withValues(alpha: 0.15),
+                  child: ListTile(
+                    dense: true,
+                    title: Text('订阅失败: $_error',
+                        style: const TextStyle(fontSize: 12)),
+                    trailing: TextButton(
+                        onPressed: _subscribe, child: const Text('重试')),
+                  ),
+                ),
+              if (state != null)
+                AnimatedBuilder(
+                  animation: state,
+                  builder: (context, _) => _ContextUsageBar(state: state),
+                ),
+              Expanded(
+                child: state == null
+                    ? Center(
+                        child: _sessionId == null
+                            ? Text('输入消息开始新会话',
+                                style: TextStyle(color: ZInk.faint(context)))
+                            : const CircularProgressIndicator(),
+                      )
+                    : !state.ready
+                        ? const Center(child: CircularProgressIndicator())
+                        : AnimatedBuilder(
+                            animation: state,
+                            builder: (context, _) {
+                              final groups = _groupRows(state.rows);
+                              final itemCount = groups.length +
+                                  _echoes.length +
+                                  (state.canLoadOlder ? 1 : 0);
+                              if (groups.isEmpty &&
+                                  _echoes.isEmpty &&
+                                  !state.canLoadOlder) {
                                 return Center(
-                                  child: TextButton.icon(
-                                    onPressed:
-                                        _loadingOlder ? null : _loadOlder,
-                                    icon: _loadingOlder
-                                        ? const SizedBox(
-                                            width: 12,
-                                            height: 12,
-                                            child: CircularProgressIndicator(
-                                                strokeWidth: 1.5),
-                                          )
-                                        : const Icon(Icons.history, size: 14),
-                                    label: const Text('加载更早消息',
-                                        style: TextStyle(fontSize: 12)),
-                                  ),
-                                );
+                                    child: Text('暂无消息',
+                                        style: TextStyle(
+                                            color: ZInk.faint(context))));
                               }
-                              final contentIndex =
-                                  index - (state.canLoadOlder ? 1 : 0);
-                              if (contentIndex >= groups.length) {
-                                final echo =
-                                    _echoes[contentIndex - groups.length];
-                                return _UserBubble(
-                                  row: {
-                                    'kind': 'userInput',
-                                    'text': echo['text'],
-                                    'attachments': echo['attachments'],
-                                  },
-                                  transport: _transport,
-                                  sessionId: _sessionId ?? '',
-                                  badge: '${echo['status'] ?? 'sending'}',
-                                  onRetry: echo['status'] == 'failed'
-                                      ? () => _retryEcho(echo)
-                                      : null,
-                                );
-                              }
-                              final group = groups[contentIndex];
-                              return _TurnGroupWidget(
-                                rows: group,
-                                transport: _transport,
-                                sessionId: _sessionId ?? '',
-                                onAction: _run,
-                                state: state,
+                              return ListView.builder(
+                                controller: _scrollController,
+                                padding:
+                                    const EdgeInsets.fromLTRB(14, 14, 14, 8),
+                                itemCount: itemCount,
+                                itemBuilder: (context, index) {
+                                  if (state.canLoadOlder && index == 0) {
+                                    return Center(
+                                      child: TextButton.icon(
+                                        onPressed:
+                                            _loadingOlder ? null : _loadOlder,
+                                        icon: _loadingOlder
+                                            ? const SizedBox(
+                                                width: 12,
+                                                height: 12,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                        strokeWidth: 1.5),
+                                              )
+                                            : const Icon(Icons.history,
+                                                size: 14),
+                                        label: const Text('加载更早消息',
+                                            style: TextStyle(fontSize: 12)),
+                                      ),
+                                    );
+                                  }
+                                  final contentIndex =
+                                      index - (state.canLoadOlder ? 1 : 0);
+                                  if (contentIndex >= groups.length) {
+                                    final echo =
+                                        _echoes[contentIndex - groups.length];
+                                    return _UserBubble(
+                                      row: {
+                                        'kind': 'userInput',
+                                        'text': echo['text'],
+                                        'attachments': echo['attachments'],
+                                      },
+                                      transport: _transport,
+                                      sessionId: _sessionId ?? '',
+                                      badge: '${echo['status'] ?? 'sending'}',
+                                      onRetry: echo['status'] == 'failed'
+                                          ? () => _retryEcho(echo)
+                                          : null,
+                                    );
+                                  }
+                                  final group = groups[contentIndex];
+                                  return _TurnGroupWidget(
+                                    rows: group,
+                                    transport: _transport,
+                                    sessionId: _sessionId ?? '',
+                                    onAction: _run,
+                                    state: state,
+                                  );
+                                },
                               );
                             },
-                          );
-                        },
+                          ),
+              ),
+              _ReconnectBanner(bridge: _transport.session),
+              if (state != null)
+                AnimatedBuilder(
+                  animation: state,
+                  builder: (context, _) => Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _GoalBanner(state: state),
+                      _ConversationInsights(
+                        state: state,
+                        transport: _transport,
+                        sessionId: _sessionId ?? '',
+                        rpcPlan: _planData,
+                        onOpenPlan: _showPlansSheet,
                       ),
-          ),
-          _ReconnectBanner(bridge: _transport.session),
-          if (state != null)
-            AnimatedBuilder(
-              animation: state,
-              builder: (context, _) => Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _GoalBanner(state: state),
-                  _ConversationInsights(
-                    state: state,
-                    transport: _transport,
-                    sessionId: _sessionId ?? '',
-                    rpcPlan: _planData,
-                    onOpenPlan: _showPlansSheet,
+                      _QueueBar(state: state, transport: _transport),
+                      _PendingInteractions(state: state, transport: _transport),
+                    ],
                   ),
-                  _QueueBar(state: state, transport: _transport),
-                  _PendingInteractions(state: state, transport: _transport),
-                ],
-              ),
-            ),
-          if (_showSlash)
-            _SlashCommandBar(
-              query: _inputController.text,
-              items: _slashItems,
-              onSelect: (item) {
-                if (item.name == 'compact') {
-                  _inputController.text = '/compact';
-                  _send();
-                } else {
-                  _inputController.text = item.insert;
-                  _inputController.selection = TextSelection.collapsed(
-                      offset: _inputController.text.length);
-                  setState(() => _showSlash = false);
-                }
-              },
-            ),
-          if (_progress != null)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-              child: Row(
-                children: [
-                  const SizedBox(
-                    width: 12,
-                    height: 12,
-                    child: CircularProgressIndicator(strokeWidth: 1.5),
+                ),
+              if (_showSlash)
+                _SlashCommandBar(
+                  query: _inputController.text,
+                  items: _slashItems,
+                  onSelect: (item) {
+                    if (item.name == 'compact') {
+                      _inputController.text = '/compact';
+                      _send();
+                    } else {
+                      _inputController.text = item.insert;
+                      _inputController.selection = TextSelection.collapsed(
+                          offset: _inputController.text.length);
+                      setState(() => _showSlash = false);
+                    }
+                  },
+                ),
+              if (_progress != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                  child: Row(
+                    children: [
+                      const SizedBox(
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(strokeWidth: 1.5),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(_progress!,
+                          style: TextStyle(
+                              fontSize: 11, color: ZInk.muted(context))),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  Text(_progress!,
-                      style:
-                          TextStyle(fontSize: 11, color: ZInk.muted(context))),
-                ],
+                ),
+              if (_pendingFiles.isNotEmpty)
+                _PendingFilesBar(
+                  files: _pendingFiles,
+                  uploadProgress: _uploadProgress,
+                  onRemove: (i) => setState(() => _pendingFiles.removeAt(i)),
+                ),
+              _InputBar(
+                controller: _inputController,
+                sending: _sending,
+                voiceAvailable: _voiceAvailable,
+                voiceRecording: _voiceRecording,
+                voiceWorking: _voiceWorking,
+                onSend: _send,
+                onAttach: _pickFiles,
+                onSkills: _openSkillsPicker,
+                onVoice: _toggleVoiceInput,
               ),
-            ),
-          if (_pendingFiles.isNotEmpty)
-            _PendingFilesBar(
-              files: _pendingFiles,
-              uploadProgress: _uploadProgress,
-              onRemove: (i) => setState(() => _pendingFiles.removeAt(i)),
-            ),
-          _InputBar(
-            controller: _inputController,
-            sending: _sending,
-            voiceAvailable: _voiceAvailable,
-            voiceRecording: _voiceRecording,
-            voiceWorking: _voiceWorking,
-            onSend: _send,
-            onAttach: _pickFiles,
-            onSkills: _openSkillsPicker,
-            onVoice: _toggleVoiceInput,
+            ],
           ),
-        ],
+        ),
       ),
     );
   }

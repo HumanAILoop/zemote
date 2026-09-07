@@ -288,24 +288,76 @@ class _MainShellContentState extends State<_MainShellContent> {
   @override
   Widget build(BuildContext context) {
     final bridge = _bridge;
+    final wide = MediaQuery.sizeOf(context).width >= 720;
+    final body = PopScope(
+      // Predictable back behavior instead of silently exiting:
+      // settings tab -> tasks tab -> workspace picker -> confirm exit.
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        if (_tab != 0) {
+          setState(() => _tab = 0);
+          return;
+        }
+        if (_bridge != null) {
+          _closeBridge();
+          return;
+        }
+        _confirmExit();
+      },
+      child: SafeArea(
+        child: wide
+            ? _wideLayout(bridge)
+            : Column(
+                children: [
+                  _DeviceSwitcherBar(
+                    account: widget.account,
+                    onTap: _showDeviceSwitcher,
+                  ),
+                  _ConnectionBanner(client: widget.client),
+                  Expanded(child: _content(bridge)),
+                ],
+              ),
+      ),
+    );
+    if (wide) {
+      return Scaffold(body: body);
+    }
     return Scaffold(
-      body: PopScope(
-        // Predictable back behavior instead of silently exiting:
-        // settings tab -> tasks tab -> workspace picker -> confirm exit.
-        canPop: false,
-        onPopInvokedWithResult: (didPop, result) {
-          if (didPop) return;
-          if (_tab != 0) {
-            setState(() => _tab = 0);
-            return;
-          }
-          if (_bridge != null) {
-            _closeBridge();
-            return;
-          }
-          _confirmExit();
-        },
-        child: SafeArea(
+      body: body,
+      bottomNavigationBar: AnimatedSlide(
+        offset: _navHidden ? const Offset(0, 1.2) : Offset.zero,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOut,
+        child: _phoneNav(),
+      ),
+    );
+  }
+
+  /// Tablet layout: a persistent NavigationRail on the left, content on the
+  /// right. Keeps the device switcher + connection banner above the content.
+  Widget _wideLayout(BridgeSession? bridge) {
+    return Row(
+      children: [
+        NavigationRail(
+          selectedIndex: _tab,
+          onDestinationSelected: (i) => setState(() => _tab = i),
+          labelType: NavigationRailLabelType.all,
+          destinations: const [
+            NavigationRailDestination(
+              icon: Icon(Icons.forum_outlined),
+              selectedIcon: Icon(Icons.forum),
+              label: Text('任务'),
+            ),
+            NavigationRailDestination(
+              icon: Icon(Icons.settings_outlined),
+              selectedIcon: Icon(Icons.settings),
+              label: Text('设置'),
+            ),
+          ],
+        ),
+        const VerticalDivider(width: 1, thickness: 1),
+        Expanded(
           child: Column(
             children: [
               _DeviceSwitcherBar(
@@ -313,65 +365,64 @@ class _MainShellContentState extends State<_MainShellContent> {
                 onTap: _showDeviceSwitcher,
               ),
               _ConnectionBanner(client: widget.client),
-              Expanded(
-                child: NotificationListener<ScrollNotification>(
-                  onNotification: _onScroll,
-                  child: switch (_tab) {
-                    0 => bridge == null
-                        ? _WorkspacePicker(
-                            workspaces: _workspaces,
-                            loading: _loading || _bridgeOpening,
-                            error: _error,
-                            client: widget.client,
-                            onRefresh: _load,
-                            onOpen: _openWorkspace,
-                          )
-                        : TaskHomePage(
-                            key: ValueKey(
-                                workspaceKeyOf(_activeWorkspace ?? const {})),
-                            workspace: _activeWorkspace!,
-                            session: bridge,
-                            client: widget.client,
-                            workspaces: _workspaces,
-                            onSwitchWorkspace: _closeBridge,
-                          ),
-                    _ => SettingsPage(
-                        client: widget.client,
-                        bridge: bridge,
-                        onDisconnect: () {
-                          widget.session.disconnect(widget.account.id);
-                          widget.onDisconnect();
-                        },
-                        themeController: ThemeControllerProvider.of(context),
-                      ),
-                  },
-                ),
-              ),
+              Expanded(child: _content(bridge)),
             ],
           ),
         ),
-      ),
-      bottomNavigationBar: AnimatedSlide(
-        offset: _navHidden ? const Offset(0, 1.2) : Offset.zero,
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOut,
-        child: NavigationBar(
-          selectedIndex: _tab,
-          onDestinationSelected: (i) => setState(() => _tab = i),
-          destinations: const [
-            NavigationDestination(
-              icon: Icon(Icons.forum_outlined),
-              selectedIcon: Icon(Icons.forum),
-              label: '任务',
-            ),
-            NavigationDestination(
-              icon: Icon(Icons.settings_outlined),
-              selectedIcon: Icon(Icons.settings),
-              label: '设置',
-            ),
-          ],
+      ],
+    );
+  }
+
+  Widget _phoneNav() {
+    return NavigationBar(
+      selectedIndex: _tab,
+      onDestinationSelected: (i) => setState(() => _tab = i),
+      destinations: const [
+        NavigationDestination(
+          icon: Icon(Icons.forum_outlined),
+          selectedIcon: Icon(Icons.forum),
+          label: '任务',
         ),
-      ),
+        NavigationDestination(
+          icon: Icon(Icons.settings_outlined),
+          selectedIcon: Icon(Icons.settings),
+          label: '设置',
+        ),
+      ],
+    );
+  }
+
+  Widget _content(BridgeSession? bridge) {
+    return NotificationListener<ScrollNotification>(
+      onNotification: _onScroll,
+      child: switch (_tab) {
+        0 => bridge == null
+            ? _WorkspacePicker(
+                workspaces: _workspaces,
+                loading: _loading || _bridgeOpening,
+                error: _error,
+                client: widget.client,
+                onRefresh: _load,
+                onOpen: _openWorkspace,
+              )
+            : TaskHomePage(
+                key: ValueKey(workspaceKeyOf(_activeWorkspace ?? const {})),
+                workspace: _activeWorkspace!,
+                session: bridge,
+                client: widget.client,
+                workspaces: _workspaces,
+                onSwitchWorkspace: _closeBridge,
+              ),
+        _ => SettingsPage(
+            client: widget.client,
+            bridge: bridge,
+            onDisconnect: () {
+              widget.session.disconnect(widget.account.id);
+              widget.onDisconnect();
+            },
+            themeController: ThemeControllerProvider.of(context),
+          ),
+      },
     );
   }
 

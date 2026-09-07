@@ -2,6 +2,13 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [0.5.3-beta.3] - 2026-09-01
+
+### Changed
+- 平板优化：宽屏下底部导航改为左侧 NavigationRail。
+- 对话内容限制最大宽度并居中，避免在平板上横向拉得过宽。
+- 任务列表内容限制最大宽度并居中。
+
 ## [0.5.3-beta.2] - 2026-09-01
 
 ### Changed
