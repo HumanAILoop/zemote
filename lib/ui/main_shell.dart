@@ -94,8 +94,7 @@ class _MainShellState extends State<MainShell> {
             children: [
               Icon(Icons.link_off, size: 48, color: ZInk.ghost(context)),
               const SizedBox(height: 12),
-              Text('当前设备已断开连接',
-                  style: TextStyle(color: ZInk.muted(context))),
+              Text('当前设备已断开连接', style: TextStyle(color: ZInk.muted(context))),
               const SizedBox(height: 16),
               FilledButton.icon(
                 onPressed: widget.onDisconnect,
@@ -152,6 +151,8 @@ class _MainShellContentState extends State<_MainShellContent> {
   StreamSubscription? _updatedSub;
   TaskNotifier? _taskNotifier;
   AppLifecycleListener? _lifecycle;
+  double _lastScrollOffset = 0;
+  bool _navHidden = false;
 
   @override
   void initState() {
@@ -233,7 +234,8 @@ class _MainShellContentState extends State<_MainShellContent> {
   /// Background task notifications: while tasks are running, a silent
   /// foreground-service notification shows live progress and completion
   /// alerts route back into the task's chat (Android only).
-  void _startTaskNotifier(BridgeSession bridge, Map<String, dynamic> workspace) {
+  void _startTaskNotifier(
+      BridgeSession bridge, Map<String, dynamic> workspace) {
     if (!Notifications.isSupported || _taskNotifier != null) return;
     final scope = <String, dynamic>{
       'workspacePath': workspace['workspacePath'],
@@ -312,57 +314,79 @@ class _MainShellContentState extends State<_MainShellContent> {
               ),
               _ConnectionBanner(client: widget.client),
               Expanded(
-                child: switch (_tab) {
-                  0 => bridge == null
-                      ? _WorkspacePicker(
-                          workspaces: _workspaces,
-                          loading: _loading || _bridgeOpening,
-                          error: _error,
-                          client: widget.client,
-                          onRefresh: _load,
-                          onOpen: _openWorkspace,
-                        )
-                      : TaskHomePage(
-                          key: ValueKey(
-                              workspaceKeyOf(_activeWorkspace ?? const {})),
-                          workspace: _activeWorkspace!,
-                          session: bridge,
-                          client: widget.client,
-                          workspaces: _workspaces,
-                          onSwitchWorkspace: _closeBridge,
-                        ),
-                  _ => SettingsPage(
-                      client: widget.client,
-                      bridge: bridge,
-                      onDisconnect: () {
-                        widget.session.disconnect(widget.account.id);
-                        widget.onDisconnect();
-                      },
-                      themeController: ThemeControllerProvider.of(context),
-                    ),
-                },
+                child: NotificationListener<ScrollNotification>(
+                  onNotification: _onScroll,
+                  child: switch (_tab) {
+                    0 => bridge == null
+                        ? _WorkspacePicker(
+                            workspaces: _workspaces,
+                            loading: _loading || _bridgeOpening,
+                            error: _error,
+                            client: widget.client,
+                            onRefresh: _load,
+                            onOpen: _openWorkspace,
+                          )
+                        : TaskHomePage(
+                            key: ValueKey(
+                                workspaceKeyOf(_activeWorkspace ?? const {})),
+                            workspace: _activeWorkspace!,
+                            session: bridge,
+                            client: widget.client,
+                            workspaces: _workspaces,
+                            onSwitchWorkspace: _closeBridge,
+                          ),
+                    _ => SettingsPage(
+                        client: widget.client,
+                        bridge: bridge,
+                        onDisconnect: () {
+                          widget.session.disconnect(widget.account.id);
+                          widget.onDisconnect();
+                        },
+                        themeController: ThemeControllerProvider.of(context),
+                      ),
+                  },
+                ),
               ),
             ],
           ),
         ),
       ),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _tab,
-        onDestinationSelected: (i) => setState(() => _tab = i),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.forum_outlined),
-            selectedIcon: Icon(Icons.forum),
-            label: '任务',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.settings_outlined),
-            selectedIcon: Icon(Icons.settings),
-            label: '设置',
-          ),
-        ],
+      bottomNavigationBar: AnimatedSlide(
+        offset: _navHidden ? const Offset(0, 1.2) : Offset.zero,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOut,
+        child: NavigationBar(
+          selectedIndex: _tab,
+          onDestinationSelected: (i) => setState(() => _tab = i),
+          destinations: const [
+            NavigationDestination(
+              icon: Icon(Icons.forum_outlined),
+              selectedIcon: Icon(Icons.forum),
+              label: '任务',
+            ),
+            NavigationDestination(
+              icon: Icon(Icons.settings_outlined),
+              selectedIcon: Icon(Icons.settings),
+              label: '设置',
+            ),
+          ],
+        ),
       ),
     );
+  }
+
+  /// Hides the bottom nav while scrolling down the content, shows it again
+  /// when scrolling up (mirrors common app behavior, issue #6).
+  bool _onScroll(ScrollNotification notification) {
+    if (notification.metrics.axis != Axis.vertical) return false;
+    final delta = notification.metrics.pixels - _lastScrollOffset;
+    _lastScrollOffset = notification.metrics.pixels;
+    if (delta.abs() < 4) return false;
+    final hide = delta > 0;
+    if (hide != _navHidden) {
+      setState(() => _navHidden = hide);
+    }
+    return false;
   }
 
   Future<void> _confirmExit() async {
@@ -466,8 +490,8 @@ class _DeviceSwitchSheet extends StatelessWidget {
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: Text('设备列表',
-                      style: TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.w700)),
+                      style:
+                          TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
                 ),
               ),
               Flexible(
@@ -601,8 +625,7 @@ class _WorkspacePicker extends StatelessWidget {
                         TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
               ),
               _ConnectionDot(client: client),
-              IconButton(
-                  icon: const Icon(Icons.refresh), onPressed: onRefresh),
+              IconButton(icon: const Icon(Icons.refresh), onPressed: onRefresh),
             ],
           ),
         ),
@@ -645,10 +668,8 @@ class _WorkspacePicker extends StatelessWidget {
                                           borderRadius:
                                               BorderRadius.circular(10),
                                         ),
-                                        child: const Icon(
-                                            Icons.folder_outlined,
-                                            color: ZColors.primary,
-                                            size: 20),
+                                        child: const Icon(Icons.folder_outlined,
+                                            color: ZColors.primary, size: 20),
                                       ),
                                       const SizedBox(width: 12),
                                       Expanded(
@@ -660,8 +681,7 @@ class _WorkspacePicker extends StatelessWidget {
                                               workspaceTitle(workspace),
                                               style: const TextStyle(
                                                   fontSize: 15,
-                                                  fontWeight:
-                                                      FontWeight.w600),
+                                                  fontWeight: FontWeight.w600),
                                             ),
                                             const SizedBox(height: 2),
                                             Text(
@@ -673,8 +693,7 @@ class _WorkspacePicker extends StatelessWidget {
                                                   fontSize: 11,
                                                   color: ZInk.faint(context)),
                                               maxLines: 1,
-                                              overflow:
-                                                  TextOverflow.ellipsis,
+                                              overflow: TextOverflow.ellipsis,
                                             ),
                                           ],
                                         ),
@@ -731,15 +750,13 @@ class _ConnectionBanner extends StatelessWidget {
         return Container(
           width: double.infinity,
           color: color.withValues(alpha: 0.15),
-          padding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           child: Row(
             children: [
               Icon(icon, size: 14, color: color),
               const SizedBox(width: 8),
               Expanded(
-                child: Text(text,
-                    style: TextStyle(fontSize: 12, color: color)),
+                child: Text(text, style: TextStyle(fontSize: 12, color: color)),
               ),
             ],
           ),
@@ -777,8 +794,7 @@ class _ConnectionDot extends StatelessWidget {
               Container(
                 width: 7,
                 height: 7,
-                decoration:
-                    BoxDecoration(color: color, shape: BoxShape.circle),
+                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
               ),
               const SizedBox(width: 6),
               Text(text, style: TextStyle(fontSize: 11, color: color)),

@@ -1138,7 +1138,6 @@ class _ChatPageState extends State<ChatPage> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   _GoalBanner(state: state),
-                  _ActiveExecutionBar(state: state),
                   _ConversationInsights(
                     state: state,
                     transport: _transport,
@@ -1503,7 +1502,7 @@ class _ExecutionTrace extends StatelessWidget {
         border: Border.all(color: ZInk.panelBorder(context)),
       ),
       child: ExpansionTile(
-        initiallyExpanded: _running,
+        initiallyExpanded: false,
         dense: true,
         shape: const Border(),
         collapsedShape: const Border(),
@@ -1537,71 +1536,6 @@ class _ExecutionTrace extends StatelessWidget {
         ],
       ),
     );
-  }
-}
-
-class _ActiveExecutionBar extends StatelessWidget {
-  final ConversationState state;
-
-  const _ActiveExecutionBar({required this.state});
-
-  @override
-  Widget build(BuildContext context) {
-    final active = state.rows.where((row) {
-      final kind = row['kind'];
-      return (kind == 'toolCall' ||
-              kind == 'reasoning' ||
-              kind == 'subagent') &&
-          (row['status'] == 'running' ||
-              row['status'] == 'inputStreaming' ||
-              row['state'] == 'streaming');
-    }).toList();
-    if (active.isEmpty) return const SizedBox.shrink();
-    final current = active.last;
-    final label = current['kind'] == 'toolCall'
-        ? '${current['toolName'] ?? '工具'} 执行中'
-        : current['kind'] == 'subagent'
-            ? '子代理执行中'
-            : '正在思考';
-    return Container(
-      margin: const EdgeInsets.fromLTRB(14, 3, 14, 0),
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
-      decoration: BoxDecoration(
-        color: ZColors.running.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: ZColors.running.withValues(alpha: 0.3)),
-      ),
-      child: Row(
-        children: [
-          const SizedBox(
-            width: 13,
-            height: 13,
-            child: CircularProgressIndicator(strokeWidth: 1.6),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              active.length > 1 ? '$label · 还有 ${active.length - 1} 项' : label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(fontSize: 11.5, color: ZInk.soft(context)),
-            ),
-          ),
-          TextButton(
-            onPressed: () => _scrollToLatest(context),
-            style: TextButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                minimumSize: Size.zero),
-            child: const Text('跟随', style: TextStyle(fontSize: 11)),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _scrollToLatest(BuildContext context) {
-    Scrollable.ensureVisible(context,
-        duration: const Duration(milliseconds: 180), alignment: 1);
   }
 }
 
@@ -2712,71 +2646,74 @@ class _ConversationInsightsState extends State<_ConversationInsights> {
     final completed = steps?.where((step) => step.completed).length ?? 0;
     return Container(
       margin: const EdgeInsets.fromLTRB(14, 5, 14, 4),
-      padding: const EdgeInsets.fromLTRB(12, 9, 8, 9),
       decoration: BoxDecoration(
         color: ZInk.panel(context),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: ZInk.panelBorder(context)),
       ),
-      child: Row(
-        children: [
-          Container(
-            width: 30,
-            height: 30,
-            decoration: BoxDecoration(
-              color: ZColors.primary.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(9),
-            ),
-            child: const Icon(Icons.dashboard_customize_outlined,
-                size: 17, color: ZColors.primary),
+      child: ExpansionTile(
+        initiallyExpanded: false,
+        shape: const Border(),
+        collapsedShape: const Border(),
+        tilePadding: const EdgeInsets.fromLTRB(12, 4, 8, 4),
+        leading: Container(
+          width: 30,
+          height: 30,
+          decoration: BoxDecoration(
+            color: ZColors.primary.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(9),
           ),
-          const SizedBox(width: 9),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          child: const Icon(Icons.dashboard_customize_outlined,
+              size: 17, color: ZColors.primary),
+        ),
+        title: Text('会话工作台',
+            style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: ZInk.solid(context))),
+        subtitle: Text(
+          [
+            hasPlan ? '计划 $completed/${steps?.length ?? 0}' : '暂无计划',
+            fileSummary == null
+                ? '文件未检查'
+                : '文件 ${fileSummary.files} · +${fileSummary.additions} / -${fileSummary.deletions}',
+            works.isEmpty ? '无后台任务' : '${works.length} 个后台任务',
+          ].join(' · '),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(fontSize: 10.5, color: ZInk.muted(context)),
+        ),
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 8, 8),
+            child: Row(
               children: [
-                Text('会话工作台',
-                    style: TextStyle(
-                        fontSize: 12.5,
-                        fontWeight: FontWeight.w600,
-                        color: ZInk.solid(context))),
-                const SizedBox(height: 2),
-                Text(
-                  [
-                    hasPlan ? '计划 $completed/${steps?.length ?? 0}' : '暂无计划',
-                    fileSummary == null
-                        ? '文件未检查'
-                        : '文件 ${fileSummary.files} · +${fileSummary.additions} / -${fileSummary.deletions}',
-                    works.isEmpty ? '无后台任务' : '${works.length} 个后台任务',
-                  ].join(' · '),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(fontSize: 10.5, color: ZInk.muted(context)),
+                _WorkbenchAction(
+                  tooltip: '计划',
+                  icon: Icons.account_tree_outlined,
+                  active: hasPlan,
+                  badge: steps?.isNotEmpty == true ? '${steps!.length}' : null,
+                  onTap: () =>
+                      _openWorkbench(context, 0, steps ?? const [], works),
+                ),
+                _WorkbenchAction(
+                  tooltip: '文件变更',
+                  icon: Icons.difference_outlined,
+                  active: fileSummary != null && fileSummary.files > 0,
+                  loading: _loadingFiles,
+                  badge: fileSummary == null ? null : '${fileSummary.files}',
+                  onTap: () => _openFiles(context, steps ?? const [], works),
+                ),
+                _WorkbenchAction(
+                  tooltip: '后台任务',
+                  icon: Icons.pending_actions_outlined,
+                  active: works.isNotEmpty,
+                  badge: works.isEmpty ? null : '${works.length}',
+                  onTap: () =>
+                      _openWorkbench(context, 2, steps ?? const [], works),
                 ),
               ],
             ),
-          ),
-          _WorkbenchAction(
-            tooltip: '计划',
-            icon: Icons.account_tree_outlined,
-            active: hasPlan,
-            badge: steps?.isNotEmpty == true ? '${steps!.length}' : null,
-            onTap: () => _openWorkbench(context, 0, steps ?? const [], works),
-          ),
-          _WorkbenchAction(
-            tooltip: '文件变更',
-            icon: Icons.difference_outlined,
-            active: fileSummary != null && fileSummary.files > 0,
-            loading: _loadingFiles,
-            badge: fileSummary == null ? null : '${fileSummary.files}',
-            onTap: () => _openFiles(context, steps ?? const [], works),
-          ),
-          _WorkbenchAction(
-            tooltip: '后台任务',
-            icon: Icons.pending_actions_outlined,
-            active: works.isNotEmpty,
-            badge: works.isEmpty ? null : '${works.length}',
-            onTap: () => _openWorkbench(context, 2, steps ?? const [], works),
           ),
         ],
       ),

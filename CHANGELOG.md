@@ -2,6 +2,14 @@
 
 本项目遵循 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循 [Semantic Versioning](https://semver.org/lang/zh-CN/)。
 
+## [0.5.3-beta.2] - 2026-09-01
+
+### Changed
+- 对话页执行过程（思考 / 工具调用）默认折叠，减少快速刷屏和页面杂乱。
+- 移除对话底部固定的执行状态栏，执行状态保留在对话流中。
+- 底部「会话工作台」改为默认折叠，增大对话视图。
+- 底部导航栏随内容滚动自动隐藏 / 显示，增加可视区域。
+
 ## [0.5.3-beta.1] - 2026-09-01
 
 ### Fixed
