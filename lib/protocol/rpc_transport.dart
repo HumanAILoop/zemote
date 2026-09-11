@@ -12,8 +12,15 @@ import 'crc32.dart';
 /// receiver acknowledges assembled messages with `rpc-frame-ack`.
 class RpcFrameTransport {
   static const maxPhysicalFrameBytes = 1024 * 1024;
-  static const maxMessageBytes = 16 * 1024 * 1024;
-  static const maxFragments = 64;
+
+  /// Upper bound for a reassembled logical message. Long-context sessions
+  /// (hundreds of thousands of tokens) can produce large snapshots, so this
+  /// must be generous enough not to silently drop the initial conversation
+  /// frame — which would leave the UI spinning forever (issue #9).
+  static const maxMessageBytes = 64 * 1024 * 1024;
+
+  /// 64 MiB at 512 KiB/fragment = 128 fragments.
+  static const maxFragments = 256;
 
   /// Raw bytes per fragment; base64 expands by 4/3, keep envelope < 1 MiB.
   static const _fragmentPayloadBytes = 512 * 1024;
@@ -77,8 +84,9 @@ class RpcFrameTransport {
     }
     for (var i = 0; i < fragmentCount; i++) {
       final start = i * _fragmentPayloadBytes;
-      final end =
-          start + _fragmentPayloadBytes > bytes.length ? bytes.length : start + _fragmentPayloadBytes;
+      final end = start + _fragmentPayloadBytes > bytes.length
+          ? bytes.length
+          : start + _fragmentPayloadBytes;
       final chunk = Uint8List.sublistView(bytes, start, end);
       _seq += 1;
       sendPayload({
@@ -116,13 +124,18 @@ class RpcFrameTransport {
       return true;
     }
 
+    if (fragmentCount > maxFragments || messageBytes > maxMessageBytes) {
+      // Oversized logical message: drop it, but never silently — a dropped
+      // initial snapshot previously looked like an endless spinner (#9).
+      onLog?.call('[rpc] dropped oversized message $messageSeq '
+          '($messageBytes bytes / $fragmentCount fragments)');
+      return true;
+    }
     if (messageSeq < 0 ||
         fragmentCount < 1 ||
-        fragmentCount > maxFragments ||
         fragmentIndex < 0 ||
         fragmentIndex >= fragmentCount ||
-        messageBytes < 1 ||
-        messageBytes > maxMessageBytes) {
+        messageBytes < 1) {
       return true;
     }
 

@@ -48,6 +48,8 @@ class _TaskDetailPageState extends State<TaskDetailPage> {
             'taskId': widget.task['taskId'] ?? widget.task['id'],
           },
         ],
+        // Long-context snapshots can be large/slow to build on the desktop.
+        timeout: const Duration(seconds: 90),
       );
       if (!mounted) return;
       setState(() {

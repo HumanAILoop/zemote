@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
@@ -214,6 +215,8 @@ class _ChatPageState extends State<ChatPage> {
   String? _sessionId;
   String? _error;
   bool _sending = false;
+  bool _loadingStalled = false;
+  Timer? _loadingTimer;
   final List<Map<String, dynamic>> _echoes = [];
 
   void _dedupeEchoes() {
@@ -303,6 +306,7 @@ class _ChatPageState extends State<ChatPage> {
 
   @override
   void dispose() {
+    _loadingTimer?.cancel();
     _subscription?.dispose();
     VoiceModelEvents.changed.removeListener(_loadVoiceAvailability);
     _voiceTranscriber?.dispose();
@@ -364,13 +368,34 @@ class _ChatPageState extends State<ChatPage> {
     }
   }
 
-  Future<void> _subscribe() async {
+  /// Guard against concurrent subscriptions (e.g. retry tapped while the
+  /// first attempt is still warming up on the desktop).
+  Future<void>? _subscribeFuture;
+
+  Future<void> _subscribe() {
+    final existing = _subscribeFuture;
+    if (existing != null) return existing;
+    final future = _doSubscribe();
+    _subscribeFuture = future.whenComplete(() => _subscribeFuture = null);
+    return _subscribeFuture!;
+  }
+
+  Future<void> _doSubscribe() async {
     final sessionId = _sessionId;
     if (sessionId == null) return;
+    // Long-context sessions can take a while to warm up on the desktop. Never
+    // leave the user with an endless spinner: after a while, surface a retry.
+    _loadingStalled = false;
+    _loadingTimer?.cancel();
+    _loadingTimer = Timer(const Duration(seconds: 30), () {
+      if (!mounted) return;
+      final ready = _state?.ready ?? false;
+      if (!ready) setState(() => _loadingStalled = true);
+    });
     try {
       final sub = await _transport
           .subscribe(sessionId)
-          .timeout(const Duration(seconds: 60));
+          .timeout(const Duration(seconds: 180));
       if (!mounted) {
         await sub.dispose();
         return;
@@ -382,20 +407,84 @@ class _ChatPageState extends State<ChatPage> {
       sub.state.addListener(_scrollToBottom);
       sub.state.addListener(_dedupeEchoes);
       sub.state.addListener(_refreshPlanIfNeeded);
+      // Initial snapshots and auto-loaded history can change the list height
+      // over multiple frames. Force the first open to the newest message;
+      // later streaming updates still use the conditional follow behavior.
+      _refreshPlanIfNeeded();
+      if (sub.state.ready) {
+        _onConversationReady();
+      } else {
+        sub.state.addListener(_onConversationReady);
+      }
       // The server snapshot is a tail window (can be as few as 3 rows).
       // The official client shows the full history immediately, so
       // auto-load the missing older rows once on open.
       if (sub.state.canLoadOlder) {
         await _loadOlder();
       }
-      _refreshPlanIfNeeded();
-      // Initial snapshots and auto-loaded history can change the list height
-      // over multiple frames. Force the first open to the newest message;
-      // later streaming updates still use the conditional follow behavior.
       _jumpToLatest();
     } catch (e) {
+      _loadingTimer?.cancel();
       if (mounted) setState(() => _error = '$e');
     }
+  }
+
+  /// Clears the loading watchdog once the first snapshot lands.
+  void _onConversationReady() {
+    if (_state?.ready != true) return;
+    _loadingTimer?.cancel();
+    _loadingTimer = null;
+    if (_loadingStalled && mounted) {
+      setState(() => _loadingStalled = false);
+    }
+  }
+
+  /// Body shown while the conversation snapshot has not arrived yet. Spinner
+  /// first, then a clear retry affordance instead of spinning forever
+  /// (long-context sessions can be slow to load, issue #9).
+  Widget _loadingState(BuildContext context, ConversationState? state) {
+    if (_sessionId == null) {
+      return Center(
+        child: Text('输入消息开始新会话', style: TextStyle(color: ZInk.faint(context))),
+      );
+    }
+    final failed = _error != null;
+    if (failed || _loadingStalled) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                failed ? Icons.error_outline : Icons.hourglass_bottom,
+                size: 40,
+                color: failed ? ZColors.danger : ZColors.warning,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                failed ? '会话加载失败' : '会话加载超时',
+                style:
+                    const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                failed ? '$_error' : '长上下文会话可能需要更长时间，或桌面端暂时繁忙',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 12, color: ZInk.muted(context)),
+              ),
+              const SizedBox(height: 16),
+              FilledButton.icon(
+                onPressed: _subscribe,
+                icon: const Icon(Icons.refresh, size: 18),
+                label: const Text('重试'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    return const Center(child: CircularProgressIndicator());
   }
 
   void _scrollToBottom() {
@@ -1040,104 +1129,83 @@ class _ChatPageState extends State<ChatPage> {
           constraints: const BoxConstraints(maxWidth: 760),
           child: Column(
             children: [
-              if (_error != null)
-                Material(
-                  color: ZColors.danger.withValues(alpha: 0.15),
-                  child: ListTile(
-                    dense: true,
-                    title: Text('订阅失败: $_error',
-                        style: const TextStyle(fontSize: 12)),
-                    trailing: TextButton(
-                        onPressed: _subscribe, child: const Text('重试')),
-                  ),
-                ),
-              if (state != null)
+              if (state != null && state.ready)
                 AnimatedBuilder(
                   animation: state,
                   builder: (context, _) => _ContextUsageBar(state: state),
                 ),
               Expanded(
-                child: state == null
-                    ? Center(
-                        child: _sessionId == null
-                            ? Text('输入消息开始新会话',
-                                style: TextStyle(color: ZInk.faint(context)))
-                            : const CircularProgressIndicator(),
-                      )
-                    : !state.ready
-                        ? const Center(child: CircularProgressIndicator())
-                        : AnimatedBuilder(
-                            animation: state,
-                            builder: (context, _) {
-                              final groups = _groupRows(state.rows);
-                              final itemCount = groups.length +
-                                  _echoes.length +
-                                  (state.canLoadOlder ? 1 : 0);
-                              if (groups.isEmpty &&
-                                  _echoes.isEmpty &&
-                                  !state.canLoadOlder) {
+                child: (state != null && state.ready)
+                    ? AnimatedBuilder(
+                        animation: state,
+                        builder: (context, _) {
+                          final groups = _groupRows(state.rows);
+                          final itemCount = groups.length +
+                              _echoes.length +
+                              (state.canLoadOlder ? 1 : 0);
+                          if (groups.isEmpty &&
+                              _echoes.isEmpty &&
+                              !state.canLoadOlder) {
+                            return Center(
+                                child: Text('暂无消息',
+                                    style:
+                                        TextStyle(color: ZInk.faint(context))));
+                          }
+                          return ListView.builder(
+                            controller: _scrollController,
+                            padding: const EdgeInsets.fromLTRB(14, 14, 14, 8),
+                            itemCount: itemCount,
+                            itemBuilder: (context, index) {
+                              if (state.canLoadOlder && index == 0) {
                                 return Center(
-                                    child: Text('暂无消息',
-                                        style: TextStyle(
-                                            color: ZInk.faint(context))));
+                                  child: TextButton.icon(
+                                    onPressed:
+                                        _loadingOlder ? null : _loadOlder,
+                                    icon: _loadingOlder
+                                        ? const SizedBox(
+                                            width: 12,
+                                            height: 12,
+                                            child: CircularProgressIndicator(
+                                                strokeWidth: 1.5),
+                                          )
+                                        : const Icon(Icons.history, size: 14),
+                                    label: const Text('加载更早消息',
+                                        style: TextStyle(fontSize: 12)),
+                                  ),
+                                );
                               }
-                              return ListView.builder(
-                                controller: _scrollController,
-                                padding:
-                                    const EdgeInsets.fromLTRB(14, 14, 14, 8),
-                                itemCount: itemCount,
-                                itemBuilder: (context, index) {
-                                  if (state.canLoadOlder && index == 0) {
-                                    return Center(
-                                      child: TextButton.icon(
-                                        onPressed:
-                                            _loadingOlder ? null : _loadOlder,
-                                        icon: _loadingOlder
-                                            ? const SizedBox(
-                                                width: 12,
-                                                height: 12,
-                                                child:
-                                                    CircularProgressIndicator(
-                                                        strokeWidth: 1.5),
-                                              )
-                                            : const Icon(Icons.history,
-                                                size: 14),
-                                        label: const Text('加载更早消息',
-                                            style: TextStyle(fontSize: 12)),
-                                      ),
-                                    );
-                                  }
-                                  final contentIndex =
-                                      index - (state.canLoadOlder ? 1 : 0);
-                                  if (contentIndex >= groups.length) {
-                                    final echo =
-                                        _echoes[contentIndex - groups.length];
-                                    return _UserBubble(
-                                      row: {
-                                        'kind': 'userInput',
-                                        'text': echo['text'],
-                                        'attachments': echo['attachments'],
-                                      },
-                                      transport: _transport,
-                                      sessionId: _sessionId ?? '',
-                                      badge: '${echo['status'] ?? 'sending'}',
-                                      onRetry: echo['status'] == 'failed'
-                                          ? () => _retryEcho(echo)
-                                          : null,
-                                    );
-                                  }
-                                  final group = groups[contentIndex];
-                                  return _TurnGroupWidget(
-                                    rows: group,
-                                    transport: _transport,
-                                    sessionId: _sessionId ?? '',
-                                    onAction: _run,
-                                    state: state,
-                                  );
-                                },
+                              final contentIndex =
+                                  index - (state.canLoadOlder ? 1 : 0);
+                              if (contentIndex >= groups.length) {
+                                final echo =
+                                    _echoes[contentIndex - groups.length];
+                                return _UserBubble(
+                                  row: {
+                                    'kind': 'userInput',
+                                    'text': echo['text'],
+                                    'attachments': echo['attachments'],
+                                  },
+                                  transport: _transport,
+                                  sessionId: _sessionId ?? '',
+                                  badge: '${echo['status'] ?? 'sending'}',
+                                  onRetry: echo['status'] == 'failed'
+                                      ? () => _retryEcho(echo)
+                                      : null,
+                                );
+                              }
+                              final group = groups[contentIndex];
+                              return _TurnGroupWidget(
+                                rows: group,
+                                transport: _transport,
+                                sessionId: _sessionId ?? '',
+                                onAction: _run,
+                                state: state,
                               );
                             },
-                          ),
+                          );
+                        },
+                      )
+                    : _loadingState(context, state),
               ),
               _ReconnectBanner(bridge: _transport.session),
               if (state != null)

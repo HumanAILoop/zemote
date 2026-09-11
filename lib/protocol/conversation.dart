@@ -1049,7 +1049,14 @@ class ConversationSubscription extends _SubscriptionBase<ConversationState> {
     final subId = subscriptionId;
     if (subId == null || frame['subscriptionId'] != subId) return;
     _lastFrameAt = DateTime.now();
-    state.applyFrame(frame, onGap: _resync);
+    // A malformed or unexpectedly large snapshot must not leave the state
+    // stuck on `ready == false` (endless spinner). On failure, resync.
+    try {
+      state.applyFrame(frame, onGap: _resync);
+    } catch (e) {
+      _transport._log('[$_logTag] applyFrame failed: $e');
+      _resync();
+    }
   }
 
   void _startWatchdog() {
@@ -1310,7 +1317,12 @@ class SessionsIndexSubscription extends _SubscriptionBase<SessionsIndexState> {
   void _acceptLogicalFrame(Map<String, dynamic> frame) {
     final subId = subscriptionId;
     if (subId == null || frame['subscriptionId'] != subId) return;
-    state.applyFrame(frame, onGap: _resync);
+    try {
+      state.applyFrame(frame, onGap: _resync);
+    } catch (e) {
+      _transport._log('[$_logTag] applyFrame failed: $e');
+      _resync();
+    }
   }
 }
 

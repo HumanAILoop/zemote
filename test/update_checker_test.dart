@@ -7,8 +7,8 @@ import 'package:zemote/update/app_version.dart';
 
 void main() {
   test('bundled app version matches the release currently being built', () {
-    expect(appVersion, '0.5.3-beta.4');
-    expect(appBuildNumber, 18);
+    expect(appVersion, '0.5.3-beta.5');
+    expect(appBuildNumber, 19);
   });
 
   test('beta channel setting persists', () async {
@@ -46,9 +46,9 @@ void main() {
     });
 
     test('stable release is newer than beta releases of the same patch', () {
-      expect(compareVersions('0.5.3-beta.4', appVersion), 0);
-      expect(compareVersions('0.5.3-beta.5', appVersion), greaterThan(0));
-      expect(compareVersions('0.5.3-beta.3', appVersion), lessThan(0));
+      expect(compareVersions('0.5.3-beta.5', appVersion), 0);
+      expect(compareVersions('0.5.3-beta.6', appVersion), greaterThan(0));
+      expect(compareVersions('0.5.3-beta.4', appVersion), lessThan(0));
     });
 
     test('build metadata does not affect precedence', () {
