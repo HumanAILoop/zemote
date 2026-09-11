@@ -21,6 +21,7 @@
 
 ## 目录
 
+- [反馈与 AI 自动修复](#反馈与-ai-自动修复)
 - [功能特性](#功能特性)
 - [平台](#平台)
 - [快速开始](#快速开始)
@@ -33,6 +34,23 @@
 - [贡献](#贡献)
 - [Changelog](#changelog)
 - [License](#license)
+
+---
+
+## 反馈与 AI 自动修复
+
+**欢迎大家提交 [Issue](https://github.com/HumanAILoop/zemote/issues)！** 🎉
+
+无论是 Bug 反馈、功能建议，还是界面 / 交互体验问题，都欢迎通过 Issue 提出。本项目采用 **AI 全自动修复** 流程：你提交的 Issue 会被自动分析、定位、修复，并随新的 Beta 版本发布，通常无需人工介入。
+
+为了让自动修复更准确、更快，建议在 Issue 中尽量写清楚：
+
+- **问题现象**：发生了什么，你期望发生什么
+- **复现步骤**：怎样稳定复现
+- **环境信息**：设备型号、Android 版本、App 版本（设置页可见）
+- **相关日志 / 截图**：可在设置页「诊断中心 / 协议日志」中导出
+
+提交后请留意 Issue 回复与新的 Beta Release。
 
 ---
 
@@ -197,11 +215,13 @@ integration_test/             # 对真实桌面的集成测试（需 ZEMOTE_PROB
 
 ## 贡献
 
-欢迎提交 Issue 与 Pull Request。贡献前请确保：
+欢迎提交 [Issue](https://github.com/HumanAILoop/zemote/issues) 与 Pull Request。
 
-1. `flutter analyze` 无告警
-2. `flutter test` 全部通过
-3. 集成测试改动需注明需要真实桌面环境
+- **提交 Issue**：最省事的方式。问题会被 **AI 全自动分析并修复**，详见 [反馈与 AI 自动修复](#反馈与-ai-自动修复)。
+- **提交 Pull Request**：贡献代码前请确保：
+  1. `flutter analyze` 无告警
+  2. `flutter test` 全部通过
+  3. 集成测试改动需注明需要真实桌面环境
 
 ## Changelog
 
