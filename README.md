@@ -1,3 +1,8 @@
+# 由于ZCode 在登录状态下会静默RSA打包整个工作区及完整Git 历史上传至云端对象存储，本项目宣布永久停更！
+https://linux.do/t/topic/2917956
+https://linux.do/t/topic/2917923
+
+---
 <div align="center">
 
 # Zemote
