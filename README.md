@@ -4,6 +4,7 @@ https://linux.do/t/topic/2917956
 
 https://linux.do/t/topic/2917923
 
+推荐使用[paseo](https://github.com/getpaseo/paseo)和[oh-my-pi](https://www.pi-gui.com/)，完美替代
 ---
 <div align="center">
 
